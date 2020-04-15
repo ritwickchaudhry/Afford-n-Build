@@ -23,7 +23,7 @@ def get_stats():
 			y_list.append(y)
 			z_list.append(z)
 	x_, y_, z_  = [np.array(t) for t in [x_list, y_list, z_list]]
-	import pdb; pdb.set_trace()
+	return x_, y_, z_
 
 	
 if __name__ == '__main__':

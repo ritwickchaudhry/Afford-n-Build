@@ -6,15 +6,16 @@ from config import cfg
 from get_corners import get_corners
 
 
-def make_random_configuration(all_corners, areas):
+def make_random_configuration(all_corners, areas, extents):
 	random_pos = []
 	all_new_corners = []
+	X_MIN, X_MAX, Y_MIN, Y_MAX = extents
 	for corners in all_corners:
 		radius = np.linalg.norm(corners[0] - corners[2]) / 2
-		x_min = cfg["XMIN"] + radius
-		x_max = cfg["XMAX"] - radius
-		y_min = cfg["YMIN"] + radius
-		y_max = cfg["YMAX"] - radius
+		x_min = X_MIN + radius
+		x_max = X_MAX - radius
+		y_min = Y_MIN + radius
+		y_max = Y_MAX - radius
 
 		x_pos = np.random.uniform(low=x_min, high=x_max)
 		y_pos = np.random.uniform(low=y_min, high=y_max)

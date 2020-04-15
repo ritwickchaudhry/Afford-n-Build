@@ -8,7 +8,7 @@ from matplotlib.path import Path
 import matplotlib.pyplot as plt
 
 from config import cfg
-
+from make_random_configurations import make_random_configuration
 
 class SUNRGBD:
 	def __init__(self):
@@ -52,20 +52,21 @@ class SUNRGBD:
 		boxes[:,:,0] = boxes[:,:,0] - x_min
 		boxes[:,:,1] = boxes[:,:,1] - y_min
 		boxes = boxes * scale
-		return boxes, math.ceil(y_diff*scale), math.ceil(x_diff*scale)
+		return boxes, math.ceil(y_diff*scale), math.ceil(x_diff*scale), x_min, x_max, y_min, y_max
 
 	def gen_map(self, boxes, labels):
 		'''
 			Takes in a list of oriented boxes,
 			and generates a map image
 		'''
-		boxes, H, W = self.scale_boxes(boxes)
+		boxes, H, W, x_min, x_max, y_min, y_max= self.scale_boxes(boxes)
 		# image = np.zeros((cfg['H'], cfg['W']), dtype=np.uint8)
 		image = np.zeros((H, W), dtype=np.uint8)
 		for box, label in zip(boxes, labels):
 			image = self.add_oriented_box(image, box[:,:2], label)
 		plt.imshow(image, cmap='jet')
 		plt.show()
+		return x_min, x_max, y_min, y_max
 
 	def get_bboxdb(self):
 		cache_path = os.path.join(self.cache_dir, 'bboxdb.pkl')
@@ -112,8 +113,9 @@ class SUNRGBD:
 		bboxes = self.img_corner_list[index]['vertices']
 		labels = self.img_corner_list[index]['labels']
 		print(self.image_path_at(index))
-		self.gen_map(bboxes, labels)
-		
+		extents = self.gen_map(bboxes, labels)
+		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
+		self.gen_map(random_bboxes, labels)
 
 
 if __name__ == '__main__':

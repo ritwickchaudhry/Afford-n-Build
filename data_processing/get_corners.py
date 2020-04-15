@@ -30,6 +30,7 @@ def get_corners():
 			
 			corners_list.append(np.vstack([corner_1, corner_2, corner_3, corner_4]))
 			label_list.append(obj[3][0])
+			# import pdb; pdb.set_trace()
 			area_list.append(np.linalg.norm(basis[0]) * np.linalg.norm(basis[1]))
 
 		corners_list = np.stack(corners_list)

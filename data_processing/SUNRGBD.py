@@ -43,6 +43,17 @@ class SUNRGBD:
 		mask = poly_path.contains_points(coords).reshape(H,W)
 		image[mask] = label
 		return image
+	
+	def add_oriented_stack(self, image, box, label, height):
+		C, H, W = image.shape
+		poly_path = Path(box)
+		y, x = np.mgrid[:H, :W]
+		coords = np.hstack((x.reshape(-1,1), y.reshape(-1,1)))
+		mask = poly_path.contains_points(coords).reshape(H,W)
+		if label in self.label_to_index:
+			channel = self.label_to_index[label]
+			image[channel, mask] = height
+			return image
 
 	def scale_boxes(self, boxes):
 		x_min, x_max = boxes[:,:,0].min(), boxes[:,:,0].max()
@@ -53,6 +64,16 @@ class SUNRGBD:
 		boxes[:,:,1] = boxes[:,:,1] - y_min
 		boxes = boxes * scale
 		return boxes, math.ceil(y_diff*scale), math.ceil(x_diff*scale), x_min, x_max, y_min, y_max
+	
+	def gen_stack(self, boxes, labels, heights):
+		num_classes = len(self.classes)
+		boxes, H, W, x_min, x_max, y_min, y_max = self.scale_boxes(boxes)
+		image = np.zeros((num_classes, H, W), dtype=np.uint8)
+		h_min = np.min(heights)
+		h_max = np.max(heights)
+		for box, label, height in zip(boxes, labels, heights):
+			rescaled_height = (height-h_min)/(h_max-h_min)
+			image = self.odd_oriented_stack(image, box[:,:,2], label, height)
 
 	def gen_map(self, boxes, labels):
 		'''
@@ -64,9 +85,11 @@ class SUNRGBD:
 		image = np.zeros((H, W), dtype=np.uint8)
 		for box, label in zip(boxes, labels):
 			image = self.add_oriented_box(image, box[:,:2], label)
+		npad = ((cfg['PAD']),(cfg['PAD']))
+		image = np.pad(image, npad, 'constant', constant_values=0)
 		plt.imshow(image, cmap='jet')
 		plt.show()
-		return x_min, x_max, y_min, y_max
+		return (x_min, x_max, y_min, y_max), image
 
 	def get_bboxdb(self):
 		cache_path = os.path.join(self.cache_dir, 'bboxdb.pkl')
@@ -76,10 +99,11 @@ class SUNRGBD:
 			return
 
 		self.img_corner_list = []
-		for scene in tqdm(self.data[:5]):
+		for scene in tqdm(self.data[:100]):
 			corners_list = []
 			label_list = []
 			area_list = []
+			height_list = []
 			
 			objects = scene[10]
 			num_objs = objects.shape[1]
@@ -94,13 +118,16 @@ class SUNRGBD:
 				corner_3 = obj[2] - basis[0] - basis[1]
 				corner_4 = obj[2] + basis[0] - basis[1]
 				
+				height = obj[2].squeeze(0)[2]
+
 				corners_list.append(np.vstack([corner_1, corner_2, corner_3, corner_4]))
 				label_list.append(self.label_to_index[obj[3][0]])
 				area_list.append(np.linalg.norm(basis[0]) * np.linalg.norm(basis[1]))
+				height_list.append(height)
 
 			corners_list = np.stack(corners_list)
 			label_list = np.stack(label_list)
-			self.img_corner_list.append({'vertices' : corners_list, 'labels' : label_list, "areas": area_list})
+			self.img_corner_list.append({'vertices' : corners_list, 'labels' : label_list, "areas": area_list, "heights":height_list})
 		if not os.path.exists(self.cache_dir):
 			os.mkdir(self.cache_dir)
 		pickle.dump(self.img_corner_list, open(cache_path, "wb"))
@@ -113,12 +140,17 @@ class SUNRGBD:
 		bboxes = self.img_corner_list[index]['vertices']
 		labels = self.img_corner_list[index]['labels']
 		print(self.image_path_at(index))
-		extents = self.gen_map(bboxes, labels)
+		extents, image = self.gen_map(bboxes, labels)
 		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
-		self.gen_map(random_bboxes, labels)
+		_, random_image = self.gen_map(random_bboxes, labels)
+		return image, random_image
 
 
 if __name__ == '__main__':
 	sun = SUNRGBD()
-	sun[0]
+	a, b = sun[0]
+	plt.imshow(a, cmap='jet')
+	plt.show()
+	plt.imshow(b, cmap='jet')
+	plt.show()
 	# img = sun.get_bboxdb()

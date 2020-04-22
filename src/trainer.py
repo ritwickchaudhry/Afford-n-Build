@@ -31,7 +31,7 @@ class Trainer:
                                         num_workers=cfg['num_workers'])
 
         self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
-        self.model = xception()
+        self.model = xception(num_objects=len(cfg['CLASSES']))
         self.model.to(self.device)
         self.optimizer = (optim.Adam(self.model.parameters(), lr=cfg['lr']) if cfg['optimizer'] == 'Adam'
                             else optim.SGD(self.model.parameters(), lr=cfg['lr'], momentum=cfg['momentum']))
@@ -46,8 +46,8 @@ class Trainer:
         running_loss = 0
         for batch_idx, batch in enumerate(self.train_loader):
             self.optimizer.zero_grad()
-            pos_samples = batch[0].to(self.device)
-            neg_samples = batch[1].to(self.device)
+            pos_samples = batch[0].to(self.device).float()
+            neg_samples = batch[1].to(self.device).float()
 
             pos_scores = self.model(pos_samples)
             neg_scores = self.model(neg_samples)
@@ -55,7 +55,7 @@ class Trainer:
             loss = self.criterion(pos_scores, neg_scores)
             running_loss += loss.item() / len(self.train_loader)
 
-            iteration = epoch * len(self.train_loader) * batch_idx
+            iteration = epoch * len(self.train_loader) + batch_idx
             if iteration % cfg['log_every'] == 0:
                 print("Epoch {}, Batch {}, Iteration {}: Traning loss = {}".format(epoch, batch_idx,
                         iteration, loss.item()))
@@ -77,8 +77,8 @@ class Trainer:
         self.model.eval()
         running_loss = 0
         for batch_idx, batch in enumerate(self.val_loader):
-            pos_samples = batch[0].to(self.device)
-            neg_samples = batch[1].to(self.device)
+            pos_samples = batch[0].to(self.device).float()
+            neg_samples = batch[1].to(self.device).float()
 
             pos_scores = self.model(pos_samples)
             neg_scores = self.model(neg_samples)

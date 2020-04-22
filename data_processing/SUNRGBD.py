@@ -24,9 +24,7 @@ class SUNRGBD(Dataset):
 		# 		'counter', 'blinds', 'desk', 'shelves', 'curtain', 'dresser', 'pillow', 'mirror', 'floor mat', 'clothes', 
 		# 		'ceiling', 'books', 'fridge', 'tv', 'paper', 'towel', 'shower curtain', 'box', 'whiteboard', 'person', 
 		# 		'night_stand', 'toilet', 'sink', 'lamp', 'bathtub', 'bag', 'ottoman', 'dresser_mirror', 'drawer')
-		self._classes = _CLASSES = ["bathtub", "bed", "bookshelf", "box", "chair", "counter", "desk", "door", "dresser",
-									"garbage_bin", "lamp", "monitor", "night_stand", "pillow", "sink", "sofa", "table",
-									"tv", "toilet"]
+		self._classes = cfg['CLASSES']
 		self.label_to_index = {label:index for index,label in enumerate(self._classes)}
 		self.get_bboxdb()
 
@@ -81,6 +79,7 @@ class SUNRGBD(Dataset):
 		for box, label, height in zip(boxes, labels, heights):
 			rescaled_height = (height-h_min)/(h_max-h_min)
 			image = self.odd_oriented_stack(image, box[:,:,2], label, height)
+		return (x_min, x_max, y_min, y_max), image
 
 	def gen_map(self, boxes, labels):
 		'''
@@ -114,8 +113,10 @@ class SUNRGBD(Dataset):
 			
 			objects = scene[10]
 			num_objs = objects.shape[1]
-			if num_objs == 0 or num_objs > cfg['MAX_NUM'] or num_objs < cfg['MIN_NUM']:
-				continue
+			
+			assert num_objs <= cfg['MAX_NUM'] and num_objs >= cfg['MIN_NUM']
+			# if num_objs == 0 or num_objs > cfg['MAX_NUM'] or num_objs < cfg['MIN_NUM']:
+			# 	continue
 			objects = objects.squeeze(0) # num_objs
 
 			for obj in objects:
@@ -155,17 +156,18 @@ class SUNRGBD(Dataset):
 		bboxes = self.img_corner_list[index]['vertices']
 		labels = self.img_corner_list[index]['labels']
 		print(self.image_path_at(index))
-		extents, image = self.gen_map(bboxes, labels)
+		extents, image = self.gen_stack(bboxes, labels)
 		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
-		_, random_image = self.gen_map(random_bboxes, labels)
+		_, random_image = self.gen_stack(random_bboxes, labels)
 		return image, random_image
 
 
 if __name__ == '__main__':
-	sun = SUNRGBD()
-	a, b = sun[0]
-	plt.imshow(a, cmap='jet')
-	plt.show()
-	plt.imshow(b, cmap='jet')
-	plt.show()
+	# sun = SUNRGBD('data', 'cache', 'train')
+	# a, b = sun[0]
+	# print(a.shape, b.shape)
+	# plt.imshow(a, cmap='jet')
+	# plt.show()
+	# plt.imshow(b, cmap='jet')
+	# plt.show()
 	# img = sun.get_bboxdb()

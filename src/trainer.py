@@ -7,6 +7,8 @@ import numpy as np
 from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 
+from data_processing.filter import get_filtered_indices
+
 from archs.xception import xception
 from data_processing.SUNRGBD import SUNRGBD
 from config.config import cfg
@@ -15,7 +17,8 @@ from config.config import cfg
 class Trainer:
     def __init__(self):
         data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
-        idx_trainval, _ = train_test_split(np.arange(data.shape[0]), test_size=0.1, random_state=1)
+        filtered_indices = get_filtered_indices(data)
+        idx_trainval, _ = train_test_split(filtered_indices, test_size=0.1, random_state=1)
         idx_train, idx_val = train_test_split(idx_trainval, test_size=0.3, random_state=1)
         train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_train], split='train')
         val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
@@ -35,7 +38,7 @@ class Trainer:
         self.lr_scheduler = ReduceLROnPlateau(self.optimizer, factor=cfg['lr_decay'])
 
     def criterion(self, pos_scores, neg_scores):
-        return F.relu(pos_scores - neg_scores - cfg['hinge_loss_margin']).mean(dim=0)
+        return F.relu(neg_scores - pos_scores + cfg['hinge_loss_margin']).mean(dim=0)
     
     def train_epoch(self):
         running_loss = 0

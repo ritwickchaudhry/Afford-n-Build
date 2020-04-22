@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import tqdm
 from scipy.io import loadmat
 
-from config import cfg
+from config.config import cfg
 
 data_root = '/Users/ritwickchaudhry/Downloads/SUNRGBDMeta3DBB_v2.mat'
 

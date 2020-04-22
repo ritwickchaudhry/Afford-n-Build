@@ -4,9 +4,9 @@ from scipy.io import loadmat
 
 import matplotlib.pyplot as plt
 
-from config import cfg
+from config.config import cfg
 
-data_root = '../data/SUNRGBDMeta3DBB_v2.mat'
+data_root = './data/SUNRGBDMeta3DBB_v2.mat'
 
 classes = ["bathtub", "bed", "bookshelf", "box", "chair", "counter", "desk", "door", "dresser", "garbage_bin", 
  "lamp", "monitor", "night_stand", "pillow", "sink", "sofa", "table", "tv", "toilet"]

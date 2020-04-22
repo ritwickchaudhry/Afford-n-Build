@@ -1,6 +1,6 @@
 cfg = {
-	'MIN_NUM': 5,
-	'MAX_NUM': 15,
+	'MIN_NUM': 3,
+	'MAX_NUM': 10,
 	'ZMIN': -4.0, 	# Vertical
 	'ZMAX': 4.0,
 	'XMIN': -6.0,
@@ -10,6 +10,10 @@ cfg = {
 	'H': 128,
 	'W': 128,
 	'PAD': 20,
+	'CLASSES': ("bathtub", "bed", "bookshelf", "box", "chair", 
+				"counter", "desk", "door", "dresser", "garbage_bin", 
+ 				"lamp", "monitor", "night_stand", "pillow", "sink", 
+				 "sofa", "table", "tv", "toilet"),
 	# Trainer configs
 	'data_root': 'data/',
 	'cache_dir': 'cache/',

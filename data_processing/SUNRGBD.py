@@ -7,19 +7,26 @@ from scipy.io import loadmat
 from matplotlib.path import Path
 import matplotlib.pyplot as plt
 
-from config import cfg
-from make_random_configurations import make_random_configuration
+from torch.utils.data import Dataset
 
-class SUNRGBD:
-	def __init__(self):
-		self.data_root = '../data/'
-		self.cache_dir = '../cache/'
-		data_path = os.path.join(self.data_root, 'SUNRGBDMeta3DBB_v2.mat')
-		self.data = loadmat(data_path)['SUNRGBDMeta'].squeeze()
-		self._classes = _CLASSES =  ('wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 
-				'counter', 'blinds', 'desk', 'shelves', 'curtain', 'dresser', 'pillow', 'mirror', 'floor mat', 'clothes', 
-				'ceiling', 'books', 'fridge', 'tv', 'paper', 'towel', 'shower curtain', 'box', 'whiteboard', 'person', 
-				'night_stand', 'toilet', 'sink', 'lamp', 'bathtub', 'bag', 'ottoman', 'dresser_mirror', 'drawer')
+from shapely.geometry import Polygon
+
+from config.config import cfg
+from data_processing.make_random_configurations import make_random_configuration
+
+class SUNRGBD(Dataset):
+	def __init__(self, data_root, cache_dir, data, split="train"):
+		self.data_root = data_root
+		self.cache_dir = cache_dir
+		self.split = split
+		self.data = data
+		# self._classes = _CLASSES =  ('wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 
+		# 		'counter', 'blinds', 'desk', 'shelves', 'curtain', 'dresser', 'pillow', 'mirror', 'floor mat', 'clothes', 
+		# 		'ceiling', 'books', 'fridge', 'tv', 'paper', 'towel', 'shower curtain', 'box', 'whiteboard', 'person', 
+		# 		'night_stand', 'toilet', 'sink', 'lamp', 'bathtub', 'bag', 'ottoman', 'dresser_mirror', 'drawer')
+		self._classes = _CLASSES = ["bathtub", "bed", "bookshelf", "box", "chair", "counter", "desk", "door", "dresser",
+									"garbage_bin", "lamp", "monitor", "night_stand", "pillow", "sink", "sofa", "table",
+									"tv", "toilet"]
 		self.label_to_index = {label:index for index,label in enumerate(self._classes)}
 		self.get_bboxdb()
 
@@ -92,7 +99,7 @@ class SUNRGBD:
 		return (x_min, x_max, y_min, y_max), image
 
 	def get_bboxdb(self):
-		cache_path = os.path.join(self.cache_dir, 'bboxdb.pkl')
+		cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
 		if os.path.exists(cache_path):
 			print('Loading bboxdb from cached file')
 			self.img_corner_list = pickle.load(open(cache_path, 'rb'))
@@ -132,6 +139,14 @@ class SUNRGBD:
 			os.mkdir(self.cache_dir)
 		pickle.dump(self.img_corner_list, open(cache_path, "wb"))
 		return
+	
+	def get_IoU(self, corners_1, corners_2):
+		box_1 = Polygon([corner[:2] for corner in corners_1])
+		box_2 = Polygon([corner[:2] for corner in corners_2])
+		IoU = box_1.intersect(box_2) / box_1.union(box_2)
+		
+		return IoU
+
 
 	def __len__(self):
 		self.len(self.img_corner_list)

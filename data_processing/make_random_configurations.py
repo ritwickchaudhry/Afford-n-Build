@@ -1,9 +1,8 @@
 import numpy as np
-from tqdm import tqdm
-from scipy.io import loadmat
+# from tqdm import tqdm
+# from scipy.io import loadmat
 
-from config import cfg
-from get_corners import get_corners
+# from get_corners import get_corners
 
 
 def make_random_configuration(all_corners, areas, extents):
@@ -40,6 +39,6 @@ def make_random_configuration(all_corners, areas, extents):
 	return np.stack(all_new_corners)
 
 	
-if __name__ == '__main__':
-	data = get_corners()
-	make_random_configuration(data[0]["vertices"], data[0]["areas"])
+# if __name__ == '__main__':
+# 	data = get_corners()
+# 	make_random_configuration(data[0]["vertices"], data[0]["areas"])

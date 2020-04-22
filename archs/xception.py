@@ -124,8 +124,7 @@ class Xception(nn.Module):
 
 		self.fc2 = nn.Sequential(
 			nn.Linear(128, 1),
-			nn.Dropout(p=0.4),
-			nn.LeakyReLU(inplace=True)
+			nn.Tanh()
 		)
 		# import pdb; pdb.set_trace()
 

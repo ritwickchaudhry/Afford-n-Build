@@ -22,9 +22,11 @@ cfg = {
 	'lr': 0.001,
 	'momentum': 0.9,
 	'lr_decay': 0.1,
-	'batch_size': 32,
+	'batch_size': 1,
 	'num_workers': 4,
 	'optimizer': 'Adam', # 'Adam' or 'SGD'
 	'use_cuda': True,
-	'hinge_loss_margin': 0.5
+	'hinge_loss_margin': 0.5,
+	'log_every': 100,
+	'val_every': 100
 }

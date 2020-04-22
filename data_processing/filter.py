@@ -14,7 +14,7 @@ def get_filtered_indices(data):
         objects = objects.squeeze(0) # num_objs
         for obj in objects:
             label = obj[3][0]
-            if label in classes:
+            if label in cfg['CLASSES']:
                 num_class_objects += 1
         if num_class_objects >= cfg['MIN_NUM'] and num_class_objects <= cfg['MAX_NUM']:
             indices.append(idx)

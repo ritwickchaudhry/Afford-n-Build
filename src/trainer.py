@@ -28,10 +28,10 @@ class Trainer:
         self.val_loader = DataLoader(val_dataset, batch_size=cfg['batch_size'], shuffle=True,
                                         num_workers=cfg['num_workers'])
 
-        self.device = torch.device('cuda' if cgf['use_cuda'] and torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
         
         self.model = xception()
-        self.model.to(device)
+        self.model.to(self.device)
         
         self.optimizer = (optim.Adam(self.model.parameters(), lr=cfg['lr']) if cfg['optimizer'] == 'Adam'
                             else optim.SGD(self.model.parameters(), lr=cfg['lr'], momentum=cfg['momentum']))
@@ -88,4 +88,5 @@ class Trainer:
 
 if __name__ == '__main__':
     trainer = Trainer()
-    import pdb; pb.set_trace()
+    # import pdb; pdb.set_trace()
+    print(trainer.train_epoch())

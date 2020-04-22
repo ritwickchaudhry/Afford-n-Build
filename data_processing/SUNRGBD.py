@@ -58,7 +58,7 @@ class SUNRGBD(Dataset):
 		if label in self.label_to_index:
 			channel = self.label_to_index[label]
 			image[channel, mask] = height
-			return image
+		return image
 
 	def scale_boxes(self, boxes):
 		x_min, x_max = boxes[:,:,0].min(), boxes[:,:,0].max()
@@ -78,7 +78,7 @@ class SUNRGBD(Dataset):
 		h_max = np.max(heights)
 		for box, label, height in zip(boxes, labels, heights):
 			rescaled_height = (height-h_min)/(h_max-h_min)
-			image = self.odd_oriented_stack(image, box[:,:,2], label, height)
+			image = self.add_oriented_stack(image, box[:,:2], label, height)
 		return (x_min, x_max, y_min, y_max), image
 
 	def gen_map(self, boxes, labels):
@@ -105,7 +105,7 @@ class SUNRGBD(Dataset):
 			return
 
 		self.img_corner_list = []
-		for scene in tqdm(self.data[:100]):
+		for scene in tqdm(self.data):
 			corners_list = []
 			label_list = []
 			area_list = []
@@ -140,7 +140,8 @@ class SUNRGBD(Dataset):
 
 			corners_list = np.stack(corners_list)
 			label_list = np.stack(label_list)
-			self.img_corner_list.append({'vertices' : corners_list, 'labels' : label_list, "areas": area_list, "heights":height_list})
+			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, "areas": area_list, "heights": height_list})
+		
 		if not os.path.exists(self.cache_dir):
 			os.mkdir(self.cache_dir)
 		pickle.dump(self.img_corner_list, open(cache_path, "wb"))
@@ -155,15 +156,19 @@ class SUNRGBD(Dataset):
 
 
 	def __len__(self):
-		self.len(self.img_corner_list)
+		return len(self.img_corner_list)
 
 	def __getitem__(self, index):
 		bboxes = self.img_corner_list[index]['vertices']
 		labels = self.img_corner_list[index]['labels']
-		print(self.image_path_at(index))
-		extents, image = self.gen_stack(bboxes, labels)
+		heights = self.img_corner_list[index]['heights']
+		
+		extents, image = self.gen_stack(bboxes, labels, heights)
 		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
-		_, random_image = self.gen_stack(random_bboxes, labels)
+		_, random_image = self.gen_stack(random_bboxes, labels, heights)
+
+		# TODO (amalad): We need to output consistent image sizes
+		
 		return image, random_image
 
 
@@ -176,3 +181,4 @@ if __name__ == '__main__':
 	# plt.imshow(b, cmap='jet')
 	# plt.show()
 	# img = sun.get_bboxdb()
+	print("'tever")

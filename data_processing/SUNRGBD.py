@@ -112,14 +112,19 @@ class SUNRGBD(Dataset):
 			height_list = []
 			
 			objects = scene[10]
-			num_objs = objects.shape[1]
-			
-			assert num_objs <= cfg['MAX_NUM'] and num_objs >= cfg['MIN_NUM']
-			# if num_objs == 0 or num_objs > cfg['MAX_NUM'] or num_objs < cfg['MIN_NUM']:
-			# 	continue
-			objects = objects.squeeze(0) # num_objs
+			num_class_objects = 0
+			objects = objects.squeeze(0)
+			for obj in objects:
+				label = obj[3][0]
+				if label in self._classes:
+					num_class_objects += 1
+			if num_class_objects < cfg['MIN_NUM'] or num_class_objects > cfg['MAX_NUM']:
+				continue
 
 			for obj in objects:
+				label = obj[3][0]
+				if label not in self._classes:
+					continue
 				basis = obj[0] * obj[1].T
 				corner_1 = obj[2] + basis[0] + basis[1]
 				corner_2 = obj[2] - basis[0] + basis[1]

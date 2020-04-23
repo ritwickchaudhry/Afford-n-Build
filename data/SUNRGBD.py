@@ -12,14 +12,17 @@ from torch.utils.data import Dataset
 from shapely.geometry import Polygon
 
 from config.config import cfg
-from data_processing.make_random_configurations import make_random_configuration
+from data.make_random_configurations import make_random_configuration
 
 class SUNRGBD(Dataset):
-	def __init__(self, data_root, cache_dir, data, split="train"):
+	def __init__(self, data_root, cache_dir, data=None, split="train"):
 		self.data_root = data_root
 		self.cache_dir = cache_dir
 		self.split = split
-		self.data = data
+		if data is not None:
+			self.data = data
+		else:
+			self.data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
 		# self._classes = _CLASSES =  ('wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 
 		# 		'counter', 'blinds', 'desk', 'shelves', 'curtain', 'dresser', 'pillow', 'mirror', 'floor mat', 'clothes', 
 		# 		'ceiling', 'books', 'fridge', 'tv', 'paper', 'towel', 'shower curtain', 'box', 'whiteboard', 'person', 
@@ -55,9 +58,7 @@ class SUNRGBD(Dataset):
 		y, x = np.mgrid[:H, :W]
 		coords = np.hstack((x.reshape(-1,1), y.reshape(-1,1)))
 		mask = poly_path.contains_points(coords).reshape(H,W)
-		if label in self.label_to_index:
-			channel = self.label_to_index[label]
-			image[channel, mask] = height
+		image[label, mask] = height
 		return image
 
 	def add_masked_oriented_stack(self, image, box, label, height):
@@ -66,12 +67,10 @@ class SUNRGBD(Dataset):
 		y, x = np.mgrid[:H, :W]
 		coords = np.hstack((x.reshape(-1,1), y.reshape(-1,1)))
 		mask = poly_path.contains_points(coords).reshape(H,W)
-		if label in self.label_to_index:
-			channel = self.label_to_index[label]
-			# NOTE: Can change this to incorporate multiple objects
-			# of the same class by incrementing the mask
-			image[2*channel, mask] = 1.0
-			image[2*channel+1, mask] = height
+		# NOTE: Can change this to incorporate multiple objects
+		# of the same class by incrementing the mask
+		image[2*label, mask] = 1.0
+		image[2*label+1, mask] = height
 		return image
 
 	def scale_boxes(self, boxes):
@@ -92,20 +91,24 @@ class SUNRGBD(Dataset):
 		h_max = np.max(heights)
 		for box, label, height in zip(boxes, labels, heights):
 			rescaled_height = (height-h_min)/(h_max-h_min)
-			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
 			image = self.add_oriented_stack(image, box[:,:2], label, rescaled_height)
 		return (x_min, x_max, y_min, y_max), image
 
 	def gen_masked_stack(self, boxes, labels, heights):
 		num_classes = len(self.classes)
 		boxes, H, W, x_min, x_max, y_min, y_max = self.scale_boxes(boxes)
-		image = np.zeros((2*num_classes, H, W), dtype=np.uint8) # Even channels - masks
+		image = np.zeros((2*num_classes, H, W), dtype=np.float) # Even channels - masks
 		h_min = np.min(heights)
 		h_max = np.max(heights)
 		for box, label, height in zip(boxes, labels, heights):
 			rescaled_height = (height-h_min)/(h_max-h_min)
+			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
 			image = self.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
 		return (x_min, x_max, y_min, y_max), image
+
+	def viz_map_image(self, image):
+		plt.imshow(image, cmap='jet')
+		plt.show()
 
 	def gen_map(self, boxes, labels):
 		'''
@@ -119,16 +122,34 @@ class SUNRGBD(Dataset):
 			image = self.add_oriented_box(image, box[:,:2], label)
 		npad = ((cfg['PAD']),(cfg['PAD']))
 		image = np.pad(image, npad, 'constant', constant_values=0)
-		plt.imshow(image, cmap='jet')
-		plt.show()
 		return (x_min, x_max, y_min, y_max), image
 
-	def convert_stack_to_map(self, image):
+	def convert_masked_stack_to_map(self, image):
 		'''
 			Takes in a stack image (C, H, W) and converts it to a visual
 			map image
 		'''
-		pass
+		C, H, W = image.shape
+		assert C == 2*len(self.classes), "Incorrect dims"
+
+		masks = image[::2]
+		heights = image[1::2]
+		map_image = np.argmax(heights, axis=0) + 1
+		obj_absent_mask = np.sum(masks, axis=0) == 0
+		map_image[obj_absent_mask] = 0.0
+		return map_image
+
+	def convert_masked_stack_to_height(self, image):
+		'''
+			Takes in a stack image (C, H, W) and converts it to a visual
+			height encoded image
+		'''
+		C, H, W = image.shape
+		assert C == 2*len(self.classes), "Incorrect dims"
+
+		heights = image[1::2]
+		height_image = np.max(heights*255.0, axis=0)
+		return height_image
 
 	def get_bboxdb(self):
 		cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
@@ -138,7 +159,7 @@ class SUNRGBD(Dataset):
 			return
 
 		self.img_corner_list = []
-		for scene in tqdm(self.data):
+		for scene in tqdm(self.data[:10]):
 			corners_list = []
 			label_list = []
 			area_list = []
@@ -198,7 +219,13 @@ class SUNRGBD(Dataset):
 		labels = self.img_corner_list[index]['labels']
 		heights = self.img_corner_list[index]['heights']
 		
-		extents, image = self.gen_stack(bboxes, labels, heights)
+		extents, image = self.gen_masked_stack(bboxes, labels, heights)
+		map_image = self.convert_masked_stack_to_map(image)
+		self.viz_map_image(map_image)
+		
+		height_image = self.convert_masked_stack_to_height(image)
+		self.viz_map_image(height_image)
+		
 		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
 		_, random_image = self.gen_stack(random_bboxes, labels, heights)
 
@@ -210,12 +237,5 @@ class SUNRGBD(Dataset):
 
 
 if __name__ == '__main__':
-	# sun = SUNRGBD('data', 'cache', 'train')
-	# a, b = sun[0]
-	# print(a.shape, b.shape)
-	# plt.imshow(a, cmap='jet')
-	# plt.show()
-	# plt.imshow(b, cmap='jet')
-	# plt.show()
-	# img = sun.get_bboxdb()
-	print("'tever")
+	data_obj = SUNRGBD(cfg['data_root'], cfg['cache_dir'])
+	data_obj[0]

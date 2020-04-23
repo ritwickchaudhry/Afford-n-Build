@@ -14,6 +14,8 @@ from shapely.geometry import Polygon
 from config.config import cfg
 from data.make_random_configurations import make_random_configuration
 
+from data.transforms import Flip
+
 class SUNRGBD(Dataset):
 	def __init__(self, data_root, cache_dir, data=None, split="train"):
 		self.data_root = data_root
@@ -223,6 +225,9 @@ class SUNRGBD(Dataset):
 		map_image = self.convert_masked_stack_to_map(image)
 		self.viz_map_image(map_image)
 		
+		map_image = self.convert_masked_stack_to_map(image)
+		self.viz_map_image(map_image)
+
 		height_image = self.convert_masked_stack_to_height(image)
 		self.viz_map_image(height_image)
 		

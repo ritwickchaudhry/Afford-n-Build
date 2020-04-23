@@ -3,6 +3,36 @@ import torchvision
 import numpy as np
 import torch.nn.functional as F
 
+class Flip(object):
+	"""
+		Flipping the map image
+		Args:
+			direction: 'horizontal' or 'vertical
+	"""
+
+	def __init__(self, direction='horizontal'):
+		self.direction = direction
+		assert self.is_valid_direction(), "Invalid direction"
+		self.fun = self.direction_to_flip_fun()
+
+	def is_valid_direction(self):
+		return self.direction in ['horizontal', 'vertical']
+	
+	def direction_to_flip_fun(self):
+		if self.direction == 'horizontal':
+			fun = np.fliplr
+		elif self.direction == 'vertical':
+			fun = np.flipud
+		else:
+			assert False, "Wrong direction"
+		return fun
+	
+	def __call__(self, image):
+		image = image.transpose((1,2,0))
+		image = self.fun(image)
+		return image.transpose((2,0,1))
+
+
 class MultipleRandomCrops(object):
 	"""
 	Multiple Random Crops.

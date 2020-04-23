@@ -14,7 +14,8 @@ from shapely.geometry import Polygon
 from config.config import cfg
 from data.make_random_configurations import make_random_configuration
 
-from data.transforms import Flip
+from torchvision.transforms import Compose
+from data.transforms import RandomFlip, RandomRotation, MakeSquare
 
 class SUNRGBD(Dataset):
 	def __init__(self, data_root, cache_dir, data=None, split="train"):
@@ -32,6 +33,12 @@ class SUNRGBD(Dataset):
 		self._classes = cfg['CLASSES']
 		self.label_to_index = {label:index for index,label in enumerate(self._classes)}
 		self.get_bboxdb()
+		self.transform = Compose([
+			RandomFlip(p=0.5),
+			RandomFlip(p=0.5, direction='vertical'),
+			RandomRotation(-30,30),
+			MakeSquare()
+		])
 
 	@property
 	def classes(self):
@@ -210,9 +217,6 @@ class SUNRGBD(Dataset):
 		
 		return IoU
 
-	def process(self, image, neg=False):
-		pass
-
 	def __len__(self):
 		return len(self.img_corner_list)
 
@@ -222,22 +226,36 @@ class SUNRGBD(Dataset):
 		heights = self.img_corner_list[index]['heights']
 		
 		extents, image = self.gen_masked_stack(bboxes, labels, heights)
-		map_image = self.convert_masked_stack_to_map(image)
-		self.viz_map_image(map_image)
 		
-		map_image = self.convert_masked_stack_to_map(image)
-		self.viz_map_image(map_image)
+		# -----------------------------------------------------------
+		# ---------------------- VISUALIZATION ----------------------
+		# -----------------------------------------------------------	
+		# map_image = self.convert_masked_stack_to_map(image)
+		# self.viz_map_image(map_image)
+	
+		# image = self.transform(image)
 
-		height_image = self.convert_masked_stack_to_height(image)
-		self.viz_map_image(height_image)
-		
+		# map_image = self.convert_masked_stack_to_map(image)
+		# self.viz_map_image(map_image)
+
+		# height_image = self.convert_masked_stack_to_height(image)
+		# self.viz_map_image(height_image)
+		# -----------------------------------------------------------
+
 		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
-		_, random_image = self.gen_stack(random_bboxes, labels, heights)
+		_, random_image = self.gen_masked_stack(random_bboxes, labels, heights)
+
 
 		# image - num_classes x H x W
-		image = self.process(image)
-		random_image = self.process(random_image, neg=True)
+		image = self.transform(image)
+		random_image = self.transform(random_image)
 		
+		map_image = self.convert_masked_stack_to_map(image)
+		self.viz_map_image(map_image)
+		
+		map_image = self.convert_masked_stack_to_map(random_image)
+		self.viz_map_image(map_image)
+
 		return image, random_image
 
 

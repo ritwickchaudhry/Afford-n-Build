@@ -3,6 +3,7 @@ import torchvision
 import numpy as np
 import torch.nn.functional as F
 from scipy.ndimage import rotate
+from scipy.ndimage import zoom
 
 from config.config import cfg
 
@@ -39,6 +40,13 @@ class MakeSquare(object):
 		# NOTE: Assumed - Image Shape - (C,H,W)
 		_, H, W = image.shape
 		
+		max_dim = max(H, W)
+		scale = cfg['H']/max_dim
+		newH, newW = int(scale*H), int(scale*W)
+		image = zoom(image, (1, scale, scale), order=0, mode='constant', cval=0.0)
+
+		_, H, W = image.shape
+
 		padH_top = (cfg['H'] - H)//2
 		padH_bottom = (cfg['H'] - H) - (cfg['H'] - H)//2
 		padH = (padH_top, padH_bottom)

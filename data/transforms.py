@@ -2,6 +2,7 @@ import torch
 import torchvision
 import numpy as np
 import torch.nn.functional as F
+from scipy.ndimage import rotate
 
 from config.config import cfg
 
@@ -27,27 +28,68 @@ class Pad(object):
 		image = np.pad(image, self.pad_size, 'constant', constant_values=0)
 		return image
 
-class MultipleRandomCrops(object):
+
+class RandomFlip(object):
 	"""
-	Multiple Random Crops.
-	Args:
-		outputSize (tuple or int): Desired output size. If int, square crop is made.
-		numCrops: Number of Random Crops        
+		Flipping the map image
+		Args:
+			direction: 'horizontal' or 'vertical
 	"""
 
-	def __init__(self, outputSize, numCrops, scaleSize):
-		assert isinstance(outputSize, (int, tuple))
-		if isinstance(outputSize, int):
-			self.outputSize = (outputSize, outputSize)
+	def __init__(self, p=0.5, direction='horizontal'):
+		self.p = p
+		assert self.p <= 1 and self.p >= 0, "Invalid probability value"
+		self.direction = direction
+		assert self.is_valid_direction(), "Invalid direction"
+		self.fun = self.direction_to_flip_fun()
+
+	def is_valid_direction(self):
+		return self.direction in ['horizontal', 'vertical']
+	
+	def direction_to_flip_fun(self):
+		if self.direction == 'horizontal':
+			fun = np.fliplr
+		elif self.direction == 'vertical':
+			fun = np.flipud
 		else:
-			assert len(outputSize) == 2
-			self.outputSize = outputSize
-		assert isinstance(numCrops, int)
-		self.numCrops = numCrops
-		assert isinstance(scaleSize, int)
-		self.scaleSize = scaleSize
+			assert False, "Wrong direction"
+		return fun
+	
+	def __call__(self, image):
+		sample = np.random.random()
+		if sample <= self.p:
+			image = image.transpose((1,2,0))
+			image = self.fun(image)
+			return image.transpose((2,0,1))
+		else:
+			pass
+		return image
+
+
+class RandomRotation(object):
+	"""
+		Rotating the map image, randomly
+		Args:
+			min: Minimum Angle to rotate by
+			max: Maximum Angle to rotate by
+	"""
+
+	def __init__(self, min_angle=-20, max_angle=20):
+		self.min = min_angle
+		self.max = max_angle
+		self.is_valid_angle()
+
+	def is_valid_angle(self):
+		assert self.max >= self.min
+		assert self.min >= -180
+		assert self.max <= 180
+	
+	def sample_angle(self):
+		angle = np.random.random() * (self.max - self.min) + self.min
+		return angle
 
 	def __call__(self, image):
+<<<<<<< HEAD
 		# NOTE: Assumed - Image Shape - (C,H,W)
 		dtype, device = image.dtype, image.device
 		image = image.numpy()
@@ -65,3 +107,8 @@ if __name__ == '__main__':
 	image = np.arange(3*20*20).reshape((3,20,20))
 	padder = Pad()
 	import pdb; pdb.set_trace()
+=======
+		angle = self.sample_angle()
+		image = rotate(image, angle, axes=(1,2), mode='constant', cval=0.0, order=0)
+		return image
+>>>>>>> 7b5c8ff2bc34211886d3817dd0ed5c733aa40147

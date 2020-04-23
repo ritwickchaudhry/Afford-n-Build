@@ -28,6 +28,28 @@ class Pad(object):
 		image = np.pad(image, self.pad_size, 'constant', constant_values=0)
 		return image
 
+class MakeSquare(object):
+	"""
+		Adds padding to the make the image square
+	"""
+	def __init__(self):
+		pass
+	
+	def __call__(self, image):
+		# NOTE: Assumed - Image Shape - (C,H,W)
+		_, H, W = image.shape
+		
+		padH_top = (cfg['H'] - H)//2
+		padH_bottom = (cfg['H'] - H) - (cfg['H'] - H)//2
+		padH = (padH_top, padH_bottom)
+
+		padW_left = (cfg['W'] - W)//2
+		padW_right = (cfg['W'] - W) - (cfg['W'] - W)//2
+		padW = (padW_left, padW_right)
+
+		pad_size = ((0,0), padH, padW)
+		image = np.pad(image, pad_size, 'constant', constant_values=0)
+		return image
 
 class RandomFlip(object):
 	"""

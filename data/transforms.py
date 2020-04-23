@@ -3,6 +3,30 @@ import torchvision
 import numpy as np
 import torch.nn.functional as F
 
+from config.config import cfg
+
+class Pad(object):
+	"""
+		Adds constant padding to the image boundaries
+		Args:
+			pad_size (tuple or int): Desired padding. If int, equal padding is used in both dimensions
+	"""
+	def __init__(self, pad_size=None):
+		if pad_size is not None:
+			assert isinstance(pad_size, (int, tuple))
+			if isinstance(pad_size, int):
+				self.pad_size = ((0,0), (pad_size,pad_size), (pad_size,pad_size))
+			else:
+				assert len(pad_size) == 2
+				self.pad_size = ((0,0), (pad_size[0],pad_size[0]), (pad_size[1],pad_size[1]))
+		else:
+			self.pad_size = ((0,0),(cfg['PAD'],cfg['PAD']),(cfg['PAD'],cfg['PAD']))
+	
+	def __call__(self, image):
+		# NOTE: Assumed - Image Shape - (C,H,W)
+		image = np.pad(image, self.pad_size, 'constant', constant_values=0)
+		return image
+
 class MultipleRandomCrops(object):
 	"""
 	Multiple Random Crops.
@@ -36,3 +60,8 @@ class MultipleRandomCrops(object):
 			randomCrops[i,...] = image[:, top : top + self.outputSize[0],
 									left : left + self.outputSize[0]]
 		return F.interpolate(torch.tensor(randomCrops, dtype=dtype, device=device), size=self.scaleSize)
+
+if __name__ == '__main__':
+	image = np.arange(3*20*20).reshape((3,20,20))
+	padder = Pad()
+	import pdb; pdb.set_trace()

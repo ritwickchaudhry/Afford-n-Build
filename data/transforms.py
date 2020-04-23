@@ -89,26 +89,6 @@ class RandomRotation(object):
 		return angle
 
 	def __call__(self, image):
-<<<<<<< HEAD
-		# NOTE: Assumed - Image Shape - (C,H,W)
-		dtype, device = image.dtype, image.device
-		image = image.numpy()
-		H, W = image.shape[1:]
-		randomCrops = np.zeros(((self.numCrops,image.shape[0]) + self.outputSize), dtype=image.dtype)
-		for i in range(self.numCrops):
-			top = np.random.randint(0, H - self.outputSize[0])
-			left = np.random.randint(0, W - self.outputSize[1])
-
-			randomCrops[i,...] = image[:, top : top + self.outputSize[0],
-									left : left + self.outputSize[0]]
-		return F.interpolate(torch.tensor(randomCrops, dtype=dtype, device=device), size=self.scaleSize)
-
-if __name__ == '__main__':
-	image = np.arange(3*20*20).reshape((3,20,20))
-	padder = Pad()
-	import pdb; pdb.set_trace()
-=======
 		angle = self.sample_angle()
 		image = rotate(image, angle, axes=(1,2), mode='constant', cval=0.0, order=0)
 		return image
->>>>>>> 7b5c8ff2bc34211886d3817dd0ed5c733aa40147

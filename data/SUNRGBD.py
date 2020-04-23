@@ -60,6 +60,20 @@ class SUNRGBD(Dataset):
 			image[channel, mask] = height
 		return image
 
+	def add_masked_oriented_stack(self, image, box, label, height):
+		C, H, W = image.shape
+		poly_path = Path(box)
+		y, x = np.mgrid[:H, :W]
+		coords = np.hstack((x.reshape(-1,1), y.reshape(-1,1)))
+		mask = poly_path.contains_points(coords).reshape(H,W)
+		if label in self.label_to_index:
+			channel = self.label_to_index[label]
+			# NOTE: Can change this to incorporate multiple objects
+			# of the same class by incrementing the mask
+			image[2*channel, mask] = 1.0
+			image[2*channel+1, mask] = height
+		return image
+
 	def scale_boxes(self, boxes):
 		x_min, x_max = boxes[:,:,0].min(), boxes[:,:,0].max()
 		y_min, y_max = boxes[:,:,1].min(), boxes[:,:,1].max()
@@ -78,7 +92,19 @@ class SUNRGBD(Dataset):
 		h_max = np.max(heights)
 		for box, label, height in zip(boxes, labels, heights):
 			rescaled_height = (height-h_min)/(h_max-h_min)
-			image = self.add_oriented_stack(image, box[:,:2], label, height)
+			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
+			image = self.add_oriented_stack(image, box[:,:2], label, rescaled_height)
+		return (x_min, x_max, y_min, y_max), image
+
+	def gen_masked_stack(self, boxes, labels, heights):
+		num_classes = len(self.classes)
+		boxes, H, W, x_min, x_max, y_min, y_max = self.scale_boxes(boxes)
+		image = np.zeros((2*num_classes, H, W), dtype=np.uint8) # Even channels - masks
+		h_min = np.min(heights)
+		h_max = np.max(heights)
+		for box, label, height in zip(boxes, labels, heights):
+			rescaled_height = (height-h_min)/(h_max-h_min)
+			image = self.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
 		return (x_min, x_max, y_min, y_max), image
 
 	def gen_map(self, boxes, labels):
@@ -96,6 +122,13 @@ class SUNRGBD(Dataset):
 		plt.imshow(image, cmap='jet')
 		plt.show()
 		return (x_min, x_max, y_min, y_max), image
+
+	def convert_stack_to_map(self, image):
+		'''
+			Takes in a stack image (C, H, W) and converts it to a visual
+			map image
+		'''
+		pass
 
 	def get_bboxdb(self):
 		cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))

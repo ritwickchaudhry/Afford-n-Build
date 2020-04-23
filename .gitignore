@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-./data/**
-=======
-data/
+dataset/**
 cache/
 __pycache__/
 .DS_Store
->>>>>>> 827fe02bd2835c18bab98121c9829433f3b27ada

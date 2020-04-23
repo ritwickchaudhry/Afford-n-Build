@@ -15,9 +15,9 @@ cfg = {
  				"lamp", "monitor", "night_stand", "pillow", "sink", 
 				 "sofa", "table", "tv", "toilet"),
 	# Trainer configs
-	'data_root': 'data/',
+	'data_root': 'dataset/',
 	'cache_dir': 'cache/',
-	'data_path': 'data/SUNRGBDMeta3DBB_v2.mat',
+	'data_path': 'dataset/SUNRGBDMeta3DBB_v2.mat',
 	'epochs': 20,
 	'lr': 0.001,
 	'momentum': 0.9,

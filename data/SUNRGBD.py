@@ -154,6 +154,8 @@ class SUNRGBD(Dataset):
 		
 		return IoU
 
+	def process(self, image, neg=False):
+		pass
 
 	def __len__(self):
 		return len(self.img_corner_list)
@@ -167,7 +169,9 @@ class SUNRGBD(Dataset):
 		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
 		_, random_image = self.gen_stack(random_bboxes, labels, heights)
 
-		# TODO (amalad): We need to output consistent image sizes
+		# image - num_classes x H x W
+		image = self.process(image)
+		random_image = self.process(random_image, neg=True)
 		
 		return image, random_image
 

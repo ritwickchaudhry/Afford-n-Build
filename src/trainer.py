@@ -28,7 +28,7 @@ class Trainer:
 
         self.train_loader = DataLoader(train_dataset, batch_size=cfg['batch_size'], shuffle=True,
                                         num_workers=cfg['num_workers'])
-        self.val_loader = DataLoader(val_dataset, batch_size=cfg['batch_size'], shuffle=True,
+        self.val_loader = DataLoader(train_dataset, batch_size=cfg['batch_size'], shuffle=True,
                                         num_workers=cfg['num_workers'])
 
         self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')

@@ -26,7 +26,7 @@ cfg = {
 	'num_workers': 4,
 	'optimizer': 'Adam', # 'Adam' or 'SGD'
 	'use_cuda': True,
-	'hinge_loss_margin': 0.5,
+	'hinge_loss_margin': 1,
 	'log_every': 100,
 	'val_every': 500
 }

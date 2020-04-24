@@ -28,5 +28,5 @@ cfg = {
 	'use_cuda': True,
 	'hinge_loss_margin': 0.5,
 	'log_every': 100,
-	'val_every': 100
+	'val_every': 500
 }

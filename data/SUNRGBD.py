@@ -110,7 +110,10 @@ class SUNRGBD(Dataset):
 		h_min = np.min(heights)
 		h_max = np.max(heights)
 		for box, label, height in zip(boxes, labels, heights):
-			rescaled_height = (height-h_min)/(h_max-h_min)
+			if h_max == h_min:
+				rescaled_height = 0.0
+			else:	
+				rescaled_height = (height-h_min)/(h_max-h_min)
 			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
 			image = self.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
 		return (x_min, x_max, y_min, y_max), image
@@ -168,7 +171,7 @@ class SUNRGBD(Dataset):
 			return
 
 		self.img_corner_list = []
-		for scene in tqdm(self.data[:10]):
+		for scene in tqdm(self.data):
 			corners_list = []
 			label_list = []
 			area_list = []
@@ -251,10 +254,10 @@ class SUNRGBD(Dataset):
 		random_image = self.transform(random_image)
 		
 		map_image = self.convert_masked_stack_to_map(image)
-		self.viz_map_image(map_image)
+		# self.viz_map_image(map_image)
 		
 		map_image = self.convert_masked_stack_to_map(random_image)
-		self.viz_map_image(map_image)
+		# self.viz_map_image(map_image)
 
 		return image, random_image
 

@@ -7,10 +7,9 @@ import numpy as np
 from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 
-from data_processing.filter import get_filtered_indices
-
 from archs.xception import xception
-from data_processing.SUNRGBD import SUNRGBD
+from data.filter import get_filtered_indices
+from data.SUNRGBD import SUNRGBD
 from config.config import cfg
 
 from torch.utils.tensorboard import SummaryWriter
@@ -24,6 +23,8 @@ class Trainer:
         idx_train, idx_val = train_test_split(idx_trainval, test_size=0.3, random_state=1)
         train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_train], split='train')
         val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
+        print("Number of training instances:", len(train_dataset))
+        print("Number of validation instances:", len(val_dataset))
 
         self.train_loader = DataLoader(train_dataset, batch_size=cfg['batch_size'], shuffle=True,
                                         num_workers=cfg['num_workers'])
@@ -31,7 +32,7 @@ class Trainer:
                                         num_workers=cfg['num_workers'])
 
         self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
-        self.model = xception(num_objects=len(cfg['CLASSES']))
+        self.model = xception(num_objects=len(cfg['CLASSES'] * 2))
         self.model.to(self.device)
         self.optimizer = (optim.Adam(self.model.parameters(), lr=cfg['lr']) if cfg['optimizer'] == 'Adam'
                             else optim.SGD(self.model.parameters(), lr=cfg['lr'], momentum=cfg['momentum']))
@@ -66,6 +67,7 @@ class Trainer:
                 print("Epoch {}, Batch {}, Iteration {}: Validation loss = {}".format(epoch, batch_idx,
                         iteration, val_loss))
                 self.logger.add_scalar('val/loss', val_loss, iteration)
+                self.lr_scheduler.step(val_loss)
 
             loss.backward()
             self.optimizer.step()
@@ -93,10 +95,8 @@ class Trainer:
     def train(self):
         for epoch in range(cfg['epochs']):
             train_loss = self.train_epoch(epoch)
-            self.lr_scheduler.step(val_loss)
 
 
 if __name__ == '__main__':
     trainer = Trainer()
-    # import pdb; pdb.set_trace()
-    print(trainer.train_epoch(0))
+    trainer.train()

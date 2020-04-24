@@ -68,7 +68,7 @@ class DataGenerator():
 			corners_list = np.stack(corners_list)
 			label_list = np.stack(label_list)    
 			img_corner_list.append({'vertices' : corners_list, 'labels' : label_list, "areas": area_list})
-			self.gen_map(corners_list, label_list)
+			# self.gen_map(corners_list, label_list)
 		return img_corner_list
 
 

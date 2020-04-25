@@ -11,6 +11,7 @@ from archs.xception import xception
 from data.filter import get_filtered_indices
 from data.SUNRGBD import SUNRGBD
 from config.config import cfg
+from src.utils import AvgMeter
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -44,7 +45,7 @@ class Trainer:
         return F.relu(neg_scores - pos_scores + cfg['hinge_loss_margin']).mean(dim=0)
     
     def train_epoch(self, epoch):
-        running_loss = 0
+        running_loss = AvgMeter()
         for batch_idx, batch in enumerate(self.train_loader):
             self.optimizer.zero_grad()
             pos_samples = batch[0].to(self.device).float()
@@ -54,13 +55,14 @@ class Trainer:
             neg_scores = self.model(neg_samples)
 
             loss = self.criterion(pos_scores, neg_scores)
-            running_loss += loss.item() / len(self.train_loader)
+            # running_loss += loss.item() / len(self.train_loader)
+            running_loss.update(loss.item()*pos_scores.shape[0], pos_scores.shape[0])
 
             iteration = epoch * len(self.train_loader) + batch_idx
             if iteration % cfg['log_every'] == 0:
                 print("Epoch {}, Batch {}, Iteration {}: Traning loss = {}".format(epoch, batch_idx,
                         iteration, loss.item()))
-                self.logger.add_scalar('train/loss', loss.item(), iteration)
+                self.logger.add_scalar('train/loss', running_loss.get_avg(), iteration)
             
             if iteration % cfg['val_every'] == 0:
                 val_loss = self.validate()
@@ -72,12 +74,12 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
         
-        return running_loss
+        return running_loss.get_avg()
     
     @torch.no_grad()
     def validate(self):
+        running_loss = AvgMeter()
         self.model.eval()
-        running_loss = 0
         for batch_idx, batch in enumerate(self.val_loader):
             pos_samples = batch[0].to(self.device).float()
             neg_samples = batch[1].to(self.device).float()
@@ -86,11 +88,12 @@ class Trainer:
             neg_scores = self.model(neg_samples)
 
             loss = self.criterion(pos_scores, neg_scores)
-            running_loss += loss.item() / len(self.val_loader)
+            # running_loss += loss.item() / len(self.val_loader)
+            running_loss.update(loss.item()*pos_samples.shape[0], pos_samples.shape[0])
         
         self.model.train()
         
-        return running_loss
+        return running_loss.get_avg()
     
     def train(self):
         for epoch in range(cfg['epochs']):

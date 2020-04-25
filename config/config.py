@@ -27,6 +27,6 @@ cfg = {
 	'optimizer': 'Adam', # 'Adam' or 'SGD'
 	'use_cuda': True,
 	'hinge_loss_margin': 1,
-	'log_every': 100,
-	'val_every': 500
+	'log_every': 10,
+	'val_every': 50
 }

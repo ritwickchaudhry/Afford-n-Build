@@ -29,7 +29,7 @@ class Trainer:
 
         self.train_loader = DataLoader(train_dataset, batch_size=cfg['batch_size'], shuffle=True,
                                         num_workers=cfg['num_workers'])
-        self.val_loader = DataLoader(train_dataset, batch_size=cfg['batch_size'], shuffle=True,
+        self.val_loader = DataLoader(val_dataset, batch_size=cfg['batch_size'], shuffle=False,
                                         num_workers=cfg['num_workers'])
 
         self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
@@ -51,24 +51,28 @@ class Trainer:
             pos_samples = batch[0].to(self.device).float()
             neg_samples = batch[1].to(self.device).float()
 
-            pos_scores = self.model(pos_samples)
-            neg_scores = self.model(neg_samples)
+            # Pass the positive and negative samples together in a single batch
+            B = pos_samples.shape[0]
+            all_samples = torch.cat([pos_samples, neg_samples], dim=0)
+            all_scores = self.model(all_samples)
+            # Separate the positive and negative scores
+            pos_scores = all_scores[:B]
+            neg_scores = all_scores[B:]
 
             loss = self.criterion(pos_scores, neg_scores)
-            # running_loss += loss.item() / len(self.train_loader)
             running_loss.update(loss.item()*pos_scores.shape[0], pos_scores.shape[0])
 
             iteration = epoch * len(self.train_loader) + batch_idx
+            self.logger.add_scalars('Loss', {'train':loss.item()}, iteration)
             if iteration % cfg['log_every'] == 0:
                 print("Epoch {}, Batch {}, Iteration {}: Traning loss = {}".format(epoch, batch_idx,
                         iteration, loss.item()))
-                self.logger.add_scalar('train/loss', running_loss.get_avg(), iteration)
             
             if iteration % cfg['val_every'] == 0:
                 val_loss = self.validate()
                 print("Epoch {}, Batch {}, Iteration {}: Validation loss = {}".format(epoch, batch_idx,
                         iteration, val_loss))
-                self.logger.add_scalar('val/loss', val_loss, iteration)
+                self.logger.add_scalars('Loss', {'val':val_loss}, iteration)
                 self.lr_scheduler.step(val_loss)
 
             loss.backward()
@@ -84,11 +88,15 @@ class Trainer:
             pos_samples = batch[0].to(self.device).float()
             neg_samples = batch[1].to(self.device).float()
 
-            pos_scores = self.model(pos_samples)
-            neg_scores = self.model(neg_samples)
+            # Pass the positive and negative samples together in a single batch
+            B = pos_samples.shape[0]
+            all_samples = torch.cat([pos_samples, neg_samples], dim=0)
+            all_scores = self.model(all_samples)
+            # Separate the positive and negative scores
+            pos_scores = all_scores[:B]
+            neg_scores = all_scores[B:]
 
             loss = self.criterion(pos_scores, neg_scores)
-            # running_loss += loss.item() / len(self.val_loader)
             running_loss.update(loss.item()*pos_samples.shape[0], pos_samples.shape[0])
         
         self.model.train()

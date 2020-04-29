@@ -5,9 +5,9 @@ from shapely.geometry import box
 def get_bounds(dim):
     return (corners[0][dim], corners[1][dim], corners[2][dim], corners[3][dim])
 
-def make_neighbors(all_corners, areas, extents, orient_deg=10, trans_amt=5):
-	random_pos = []
+def make_neighbors(all_corners, areas, extents, orient_deg=10, trans_amt=5, overlap_thresh=0.5):
 	all_new_corners = []
+    boxes = []
 	X_MIN, X_MAX, Y_MIN, Y_MAX = extents
     room = box(X_MIN, Y_MIN, X_MAX, Y_MAX)
     x_trans = (trans_amt/100) * (X_MAX - X_MIN)
@@ -24,21 +24,37 @@ def make_neighbors(all_corners, areas, extents, orient_deg=10, trans_amt=5):
         obj = box(min_x, min_y, max_x, max_y)
 
         #Rotate the object
+
         while(True) :
             angle = np.random.uniform(-orient_deg, orient_deg)
             rot_obj = affinity.rotate(obj, angle) 
-            if rot_obj.intersection(room).area == rot_obj.area:
-                break
-                # No part of it lies outside the room
+
+            if rot_obj.intersection(room).area != rot_obj.area:
+                continue
+                # A part of it lies outside the room
+            for prev_obj in boxes:
+                if rot_obj.intersection(prev_obj).area > overlap_thresh:
+                    continue
+                # Overlaps with previous objects in the room
+            break
+
 
         #Translate the object
         while(True):
             t_x = np.random.uniform(-x_trans, x_trans)
             t_y = np.random.uniform(-y_trans, y_trans)
             trans_obj = affinity.translate(rot_obj, t_x, t_y)
-            if trans_obj.intersection(room).area == trans_obj.area:
-                break
-                # No part of it lies outside the room
+
+            if trans_obj.intersection(room).area != rot_obj.area:
+                continue
+                # A part of it lies outside the room
+            for prev_obj in boxes:
+                if trans_obj.intersection(prev_obj).area > overlap_thresh:
+                    continue
+                # Overlaps with previous objects in the room
+            break
+        
+        boxes.append(trans_obj)
 
         corners = np.array(trans_obj.exterior.coords)[:4]
         corners = np.concatenate((corners, heights)), 1)  

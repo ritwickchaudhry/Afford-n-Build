@@ -18,6 +18,8 @@ from torchvision.transforms import Compose
 from data.transforms import RandomFlip, RandomRotation, MakeSquare
 
 class SUNRGBD(Dataset):
+	_classes = cfg['CLASSES']
+
 	def __init__(self, data_root, cache_dir, data=None, split="train"):
 		self.data_root = data_root
 		self.cache_dir = cache_dir
@@ -26,12 +28,12 @@ class SUNRGBD(Dataset):
 			self.data = data
 		else:
 			self.data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
-		# self._classes = _CLASSES =  ('wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 
+		# SUNRGBD._classes = SUNRGBD._classes =  ('wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 
 		# 		'counter', 'blinds', 'desk', 'shelves', 'curtain', 'dresser', 'pillow', 'mirror', 'floor mat', 'clothes', 
 		# 		'ceiling', 'books', 'fridge', 'tv', 'paper', 'towel', 'shower curtain', 'box', 'whiteboard', 'person', 
 		# 		'night_stand', 'toilet', 'sink', 'lamp', 'bathtub', 'bag', 'ottoman', 'dresser_mirror', 'drawer')
-		self._classes = cfg['CLASSES']
-		self.label_to_index = {label:index for index,label in enumerate(self._classes)}
+		# SUNRGBD._classes = cfg['CLASSES']
+		self.label_to_index = {label:index for index,label in enumerate(SUNRGBD._classes)}
 		self.get_bboxdb()
 		self.transform = Compose([
 			RandomFlip(p=0.5),
@@ -42,7 +44,7 @@ class SUNRGBD(Dataset):
 
 	@property
 	def classes(self):
-		return self._classes
+		return SUNRGBD._classes
 	
 	def image_path_at(self, i):
 		imgpath = os.path.join(self.data_root, *self.data[i][4][0].split('/')[5:])
@@ -70,7 +72,8 @@ class SUNRGBD(Dataset):
 		image[label, mask] = height
 		return image
 
-	def add_masked_oriented_stack(self, image, box, label, height):
+	@staticmethod
+	def add_masked_oriented_stack(image, box, label, height):
 		C, H, W = image.shape
 		poly_path = Path(box)
 		y, x = np.mgrid[:H, :W]
@@ -82,7 +85,8 @@ class SUNRGBD(Dataset):
 		image[2*label+1, mask] = height
 		return image
 
-	def scale_boxes(self, boxes):
+	@staticmethod
+	def scale_boxes(boxes):
 		x_min, x_max = boxes[:,:,0].min(), boxes[:,:,0].max()
 		y_min, y_max = boxes[:,:,1].min(), boxes[:,:,1].max()
 		x_diff, y_diff = (x_max - x_min), (y_max - y_min)
@@ -93,8 +97,8 @@ class SUNRGBD(Dataset):
 		return boxes, math.ceil(y_diff*scale), math.ceil(x_diff*scale), x_min, x_max, y_min, y_max
 	
 	def gen_stack(self, boxes, labels, heights):
-		num_classes = len(self.classes)
-		boxes, H, W, x_min, x_max, y_min, y_max = self.scale_boxes(boxes)
+		num_classes = len(SUNRGBD._classes)
+		boxes, H, W, x_min, x_max, y_min, y_max = SUNRGBD.scale_boxes(boxes)
 		image = np.zeros((num_classes, H, W), dtype=np.uint8)
 		h_min = np.min(heights)
 		h_max = np.max(heights)
@@ -103,10 +107,11 @@ class SUNRGBD(Dataset):
 			image = self.add_oriented_stack(image, box[:,:2], label, rescaled_height)
 		return (x_min, x_max, y_min, y_max), image
 
-	def gen_masked_stack(self, boxes, labels, heights):
-		num_classes = len(self.classes)
-		boxes, H, W, x_min, x_max, y_min, y_max = self.scale_boxes(boxes)
-		image = np.zeros((2*num_classes, H, W), dtype=np.float) # Even channels - masks
+	@staticmethod
+	def gen_masked_stack(boxes, labels, heights):
+		num_classes = len(SUNRGBD._classes)
+		boxes, H, W, x_min, x_max, y_min, y_max = SUNRGBD.scale_boxes(boxes)
+		image = np.zeros((2 * num_classes, H, W), dtype=np.float) # Even channels - masks
 		h_min = np.min(heights)
 		h_max = np.max(heights)
 		for box, label, height in zip(boxes, labels, heights):
@@ -115,10 +120,11 @@ class SUNRGBD(Dataset):
 			else:	
 				rescaled_height = (height-h_min)/(h_max-h_min)
 			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
-			image = self.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
+			image = SUNRGBD.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
 		return (x_min, x_max, y_min, y_max), image
 
-	def viz_map_image(self, image):
+	@staticmethod
+	def viz_map_image(image):
 		plt.imshow(image, cmap='jet')
 		plt.show()
 
@@ -127,7 +133,7 @@ class SUNRGBD(Dataset):
 			Takes in a list of oriented boxes,
 			and generates a map image
 		'''
-		boxes, H, W, x_min, x_max, y_min, y_max= self.scale_boxes(boxes)
+		boxes, H, W, x_min, x_max, y_min, y_max= SUNRGBD.scale_boxes(boxes)
 		# image = np.zeros((cfg['H'], cfg['W']), dtype=np.uint8)
 		image = np.zeros((H, W), dtype=np.uint8)
 		for box, label in zip(boxes, labels):
@@ -136,13 +142,14 @@ class SUNRGBD(Dataset):
 		image = np.pad(image, npad, 'constant', constant_values=0)
 		return (x_min, x_max, y_min, y_max), image
 
-	def convert_masked_stack_to_map(self, image):
+	@staticmethod
+	def convert_masked_stack_to_map(image):
 		'''
 			Takes in a stack image (C, H, W) and converts it to a visual
 			map image
 		'''
 		C, H, W = image.shape
-		assert C == 2*len(self.classes), "Incorrect dims"
+		assert C == 2*len(SUNRGBD._classes), "Incorrect dims"
 
 		masks = image[::2]
 		heights = image[1::2]
@@ -182,14 +189,14 @@ class SUNRGBD(Dataset):
 			objects = objects.squeeze(0)
 			for obj in objects:
 				label = obj[3][0]
-				if label in self._classes:
+				if label in SUNRGBD._classes:
 					num_class_objects += 1
 			if num_class_objects < cfg['MIN_NUM'] or num_class_objects > cfg['MAX_NUM']:
 				continue
 
 			for obj in objects:
 				label = obj[3][0]
-				if label not in self._classes:
+				if label not in SUNRGBD._classes:
 					continue
 				basis = obj[0] * obj[1].T
 				corner_1 = obj[2] + basis[0] + basis[1]
@@ -206,7 +213,8 @@ class SUNRGBD(Dataset):
 
 			corners_list = np.stack(corners_list)
 			label_list = np.stack(label_list)
-			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, "areas": area_list, "heights": height_list})
+			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, "areas": area_list,
+											"heights": height_list})
 		
 		if not os.path.exists(self.cache_dir):
 			os.mkdir(self.cache_dir)
@@ -228,7 +236,7 @@ class SUNRGBD(Dataset):
 		labels = self.img_corner_list[index]['labels']
 		heights = self.img_corner_list[index]['heights']
 		
-		extents, image = self.gen_masked_stack(bboxes, labels, heights)
+		extents, image = SUNRGBD.gen_masked_stack(bboxes, labels, heights)
 		
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
@@ -246,22 +254,22 @@ class SUNRGBD(Dataset):
 		# -----------------------------------------------------------
 
 		random_bboxes = make_random_configuration(bboxes, self.img_corner_list[index]['areas'], extents)
-		_, random_image = self.gen_masked_stack(random_bboxes, labels, heights)
+		_, random_image = SUNRGBD.gen_masked_stack(random_bboxes, labels, heights)
 
 
 		# image - num_classes x H x W
 		image = self.transform(image)
 		random_image = self.transform(random_image)
 		
-		map_image = self.convert_masked_stack_to_map(image)
-		# self.viz_map_image(map_image)
+		# map_image = self.convert_masked_stack_to_map(image)
+		# SUNRGBD.viz_map_image(map_image)
 		
-		map_image = self.convert_masked_stack_to_map(random_image)
-		# self.viz_map_image(map_image)
+		# map_image = self.convert_masked_stack_to_map(random_image)
+		# SUNRGBD.viz_map_image(map_image)
 
 		return image, random_image
 
 
 if __name__ == '__main__':
-	data_obj = SUNRGBD(cfg['data_root'], cfg['cache_dir'])
+	val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
 	data_obj[0]

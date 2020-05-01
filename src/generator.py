@@ -1,10 +1,24 @@
 import numpy as np
+import torch
+import torch.nn.functional as F
+from archs.xception import xception
+from torchvision.transforms import Compose
+from data.transforms import RandomFlip, RandomRotation, MakeSquare
+from data.SUNRGBD import SUNRGBD
+from src.utils import get_extents_of_box, convert_to_dim
+from config.config import cfg
 
-from utils import get_extents_of_box, convert_to_dim
 
 class Generator():
 	def __init__(self):
 		super().__init__()
+		self.transform = Compose([
+			MakeSquare()
+		])
+
+		self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
+		self.model = xception(num_objects=len(cfg['CLASSES'] * 2))
+		self.model.to(self.device)
 
 	def get_translation_extent(self, all_corners, areas, extents, dim, object_idx):
 		'''
@@ -48,7 +62,7 @@ class Generator():
 
 	def translate(self, all_corners, areas, extents, dim, obj_index):
 		d_min, d_max = self.get_translation_extent(all_corners, areas, extents, dim, obj_index)
-		dv = np.random.uniform(d_min, d_max)
+		dv = np.random.uniform(-d_min, d_max)
 		all_corners[obj_index,:, dim] += dv
 		return all_corners
 		
@@ -59,23 +73,47 @@ class Generator():
 		for n in range(num_neighbours):
 			obj_index = np.random.choice(all_corners.shape[0])
 			
-			new_corners = translate(all_corners, areas, extents, 0, obj_index)
-			all_new_corners.append(translate(new_corners, areas, extents, 1, obj_index))
+			new_corners = self.translate(all_corners.copy(), areas, extents, 0, obj_index)
+			all_new_corners.append(self.translate(new_corners, areas, extents, 1, obj_index))
 
-		return all_new_corners
+		return np.stack(all_new_corners, axis=0)	# 20 x num_objects x 4 x 3
 	
-	def hill_climbing(self, all_corners, areas, extents, num_neighbours=20, beam_width=5, num_epochs=2):
-		all_new_corners = [all_corners]
-		for epoch in range(num_epochs):
-			for all_corners in all_new_corners:
-				all_new_corners = self.next(all_corners, areas, extents, num_neighbours) # 20 x corners 
-				
+	@torch.no_grad()
+	def score(self, images):
+		self.model.eval()
+		scores = F.softmax(self.model(images).view(-1), dim=-1)
+		return scores.cpu().numpy()
+	
+	def hill_climbing(self, all_corners, areas, labels, heights, extents, num_neighbours=20, beam_width=5, num_steps=2):
+		all_corners_list = all_corners[None, :, :, :]	# 1 x num_objs x 4 x 3
+		for step in range(num_steps):
+			all_new_corners_list = []
+			for all_corners in all_corners_list:
+				all_new_corners_list.append(self.next(all_corners, areas, extents, num_neighbours))	# 20 x num_objects x 4 x 3
 
+			# Concatenate new and old corners and pass through model to get scores
+			all_new_corners_list.append(all_corners_list)
+			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21 x num_objects x 4 x 3
+			# import pdb; pdb.set_trace()
+			
+			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, heights)[1])
+						for all_corners in all_new_corners_list]
+			# if step == 0:
+			# 	SUNRGBD.viz_map_image(SUNRGBD.convert_masked_stack_to_map(images[0]))
+			# 	SUNRGBD.viz_map_image(SUNRGBD.convert_masked_stack_to_map(images[-1]))
+			images = torch.Tensor(np.stack(images, axis=0)).to(self.device)
+			scores = self.score(images)
+			
+			# Pick top beam-width number of configurations w/o replacement
+			top_indices = np.random.choice(images.shape[0], beam_width, replace=False, p=scores)
+			all_corners_list = np.stack(all_new_corners_list, axis=0)[top_indices]
 		
-
-
+		return all_corners_list
 
 if __name__ == '__main__':
-	from test import *
+	# from test import *
+	# generator = Generator()
+	# print(generator.get_translation_extent(all_corners1, None, extents1, 1, index1))
+	from src.test_hill_climbing import *
 	generator = Generator()
-	print(generator.get_translation_extent(all_corners1, None, extents1, 1, index1))
+	print(generator.hill_climbing(np.array(corners), np.array(areas), np.array(labels), np.array(heights), np.array(extents)))

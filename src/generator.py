@@ -46,10 +46,33 @@ class Generator():
 		after_extent = target_boxes[after_box_indices,:,dim].min() if after_box_indices is not None else DIM_MAX
 		return (curr_min_dim - before_extent, after_extent - curr_max_dim)
 
-	def next(self, all_corners, areas, extents):
+	def translate(self, all_corners, areas, extents, dim, obj_index):
+		d_min, d_max = self.get_translation_extent(all_corners, areas, extents, dim, obj_index)
+		dv = np.random.uniform(d_min, d_max)
+		all_corners[obj_index,:, dim] += dv
+		return all_corners
+		
+	
+	def next(self, all_corners, areas, extents, num_neighbours=1):
 		all_new_corners = []
-		boxes = []
-		X_MIN, X_MAX, Y_MIN, Y_MAX = extents
+
+		for n in range(num_neighbours):
+			obj_index = np.random.choice(all_corners.shape[0])
+			
+			new_corners = translate(all_corners, areas, extents, 0, obj_index)
+			all_new_corners.append(translate(new_corners, areas, extents, 1, obj_index))
+
+		return all_new_corners
+	
+	def hill_climbing(self, all_corners, areas, extents, num_neighbours=20, beam_width=5, num_epochs=2):
+		all_new_corners = [all_corners]
+		for epoch in range(num_epochs):
+			for all_corners in all_new_corners:
+				all_new_corners = self.next(all_corners, areas, extents, num_neighbours) # 20 x corners 
+				
+
+		
+
 
 
 if __name__ == '__main__':

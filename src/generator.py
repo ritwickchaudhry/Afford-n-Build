@@ -7,6 +7,9 @@ class Generator():
 		super().__init__()
 
 	def get_translation_extent(self, all_corners, areas, extents, dim, object_idx):
+		'''
+			Invariant - Assuming the MBRs of the boxes don't overlap for the input
+		'''
 		assert dim == 0 or dim == 1,  "Only for x and y"
 		
 		X_MIN, X_MAX, Y_MIN, Y_MAX = extents

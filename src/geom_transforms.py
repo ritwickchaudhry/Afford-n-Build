@@ -5,6 +5,8 @@ import numpy as np
 from src.utils import get_extents
 from config.config import cfg
 
+from shapely.geometry import Polygon, MultiPoint
+
 def get_extents_of_box(box):
 	# assert box.shape == (4,3)
 	xs = box[:,0]
@@ -15,6 +17,11 @@ def get_extents_of_boxes(boxes):
 	xs = boxes[:,:,0]
 	ys = boxes[:,:,1]
 	return xs.min(), xs.max(), ys.min(), ys.max()
+
+def is_contained(inner_box, outer_box):
+	outer_box = Polygon(outer_box[:,:2])
+	inner_points = MultiPoint(inner_box[:,:2])
+	return outer_box.contains(inner_points)
 
 def get_total_extents(boxes, random_boxes):
 	x_min, x_max, y_min, y_max = get_extents_of_boxes(boxes)

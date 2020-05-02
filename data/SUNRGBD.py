@@ -2,6 +2,7 @@ import os
 import math
 import pickle
 import numpy as np
+from PIL import Image
 from tqdm import tqdm
 from scipy.io import loadmat
 from matplotlib.path import Path
@@ -156,8 +157,10 @@ class SUNRGBD(Dataset):
 		map_image = np.argmax(heights, axis=0) + 1
 		obj_absent_mask = np.sum(masks, axis=0) == 0
 		map_image[obj_absent_mask] = 0.0
-		map_image = np.tile(np.uint8(map_image * (255.0/len(SUNRGBD._classes)))[:,:,None], (1,1,3))
-		return map_image
+		cm = plt.get_cmap('jet', lut=len(SUNRGBD._classes)+1)
+		coloured_map = cm(map_image)
+		coloured_map = (coloured_map[:, :, :3] * 255).astype(np.uint8)
+		return Image.fromarray(coloured_map)
 
 	def convert_masked_stack_to_height(self, image):
 		'''

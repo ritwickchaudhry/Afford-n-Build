@@ -99,7 +99,6 @@ class Generator():
 			# Concatenate new and old corners and pass through model to get scores
 			all_new_corners_list.append(all_corners_list)
 			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21 x num_objects x 4 x 3
-			# import pdb; pdb.set_trace()
 			
 			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, heights)[1])
 						for all_corners in all_new_corners_list]
@@ -107,7 +106,7 @@ class Generator():
 			if step == 0:
 				# SUNRGBD.viz_map_image(SUNRGBD.convert_masked_stack_to_map(images[0]))
 				# SUNRGBD.viz_map_image(SUNRGBD.convert_masked_stack_to_map(images[-1]))
-				top_images.append(Image.fromarray(SUNRGBD.convert_masked_stack_to_map(images[-1]), mode="RGB"))
+				top_images.append(SUNRGBD.convert_masked_stack_to_map(images[-1]))
 			
 			images = torch.Tensor(np.stack(images, axis=0)).to(self.device)
 			scores = self.score(images)
@@ -118,9 +117,7 @@ class Generator():
 			# Save top image in gif
 			top_image = images[top_indices[np.argmax(scores[top_indices])]].cpu().numpy()
 			top_image = SUNRGBD.convert_masked_stack_to_map(top_image)	# 128 x 128
-			import pdb; pdb.set_trace()
-
-			top_images.append(Image.fromarray(top_image, mode="RGB"))
+			top_images.append(top_image)
 		
 		print(top_images)
 		print("===================")

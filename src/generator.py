@@ -55,7 +55,7 @@ class Generator():
 
 			# Concatenate new and old corners and pass through model to get scores
 			all_new_corners_list.append(all_corners_list)
-			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21 x num_objects x 4 x 3
+			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21/105 x num_objects x 4 x 3
 			
 			image_extents = (extents[1]-extents[0], extents[3]-extents[2])
 			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, heights, image_extents))

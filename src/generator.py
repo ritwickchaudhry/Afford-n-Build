@@ -6,11 +6,11 @@ from PIL import Image
 from torchvision.transforms import Compose
 from data.transforms import RandomFlip, RandomRotation, MakeSquare
 from data.SUNRGBD import SUNRGBD
-from src.utils import get_extents_of_box, convert_to_dim
 from config.config import cfg
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+from src.geom_transforms import teleport
 
+from src.geom_transforms import translate
 
 class Generator():
 	def __init__(self):
@@ -22,98 +22,8 @@ class Generator():
 		self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
 		self.model = xception(num_objects=len(cfg['CLASSES'] * 2))
 		self.model.to(self.device)
-
-	def get_translation_extent(self, all_corners, areas, extents, dim, object_idx):
-		'''
-			Invariant - Assuming the MBRs of the boxes don't overlap for the input
-		'''
-		assert dim == 0 or dim == 1,  "Only for x and y"
 		
-		X_MIN, X_MAX, Y_MIN, Y_MAX = extents
-		OTHER_DIM_MIN, OTHER_DIM_MAX, DIM_MIN, DIM_MAX = convert_to_dim(*extents, dim)
-
-		other_dim = 1-dim
-		# Get the MBR of the current object
-		curr_object_box = all_corners[object_idx] # 4 x 3
-		min_x, max_x, min_y, max_y = get_extents_of_box(curr_object_box)
-		# Transform to dim space
-		curr_min_other_dim, curr_max_other_dim, curr_min_dim, curr_max_dim = convert_to_dim(min_x, max_x, min_y, max_y, dim)
-		# Filter the boxes to get the target boxes
-		indices = np.ones(all_corners.shape[0], dtype=bool)
-		indices[object_idx] = False
-		other_boxes = all_corners[indices]
-		other_boxes_max_other_dim = other_boxes[:,:,other_dim].max(axis=1) # N 
-		other_boxes_min_other_dim = other_boxes[:,:,other_dim].min(axis=1) # N
-		target_boxes = other_boxes[~np.logical_or(other_boxes_max_other_dim <= curr_min_other_dim, 
-									other_boxes_min_other_dim >= curr_max_other_dim)]
-		# Segregate before and after other boxes.
-		# Enforce wall checks and also empty before/after
-		if target_boxes.shape[0] == 0:
-			before_box_indices = None
-			after_box_indices = None
-		else:
-			before_box_indices = target_boxes[:,:,dim].max(axis=1) <= curr_min_dim
-			if before_box_indices.sum() == 0:
-				before_box_indices = None
-			after_box_indices = target_boxes[:,:,dim].min(axis=1) >= curr_min_dim
-			if after_box_indices.sum() == 0:
-				after_box_indices = None
-		# Get the extents
-		before_extent = target_boxes[before_box_indices,:,dim].max() if before_box_indices is not None else DIM_MIN
-		after_extent = target_boxes[after_box_indices,:,dim].min() if after_box_indices is not None else DIM_MAX
-		return (curr_min_dim - before_extent, after_extent - curr_max_dim)
-
-	def translate(self, all_corners, areas, extents, dim, obj_index):
-		teleportation_extents = self.get_teleportation_extents(all_corners, extents, dim, obj_index)
-		if teleportation_extents.shape[0] > 0:
-			idx = np.random.choice(teleportation_extents.shape[0])
-			d_min, d_max = teleportation_extents[idx]
-			dv = np.random.uniform(d_min, d_max)
-			all_corners[obj_index,:, dim] += dv
-		return all_corners
-	
-	def get_teleportation_extents(self, all_corners, extents, dim, object_idx):
-		'''
-			Invariant - Assuming the MBRs of the boxes don't overlap for the input
-		'''
-		assert dim == 0 or dim == 1,  "Only for x and y"
-		# import pdb; pdb.set_trace()
-		X_MIN, X_MAX, Y_MIN, Y_MAX = extents
-		OTHER_DIM_MIN, OTHER_DIM_MAX, DIM_MIN, DIM_MAX = convert_to_dim(*extents, dim)
-
-		other_dim = 1-dim
-		# Get the MBR of the current object
-		curr_object_box = all_corners[object_idx] # 4 x 3
-		min_x, max_x, min_y, max_y = get_extents_of_box(curr_object_box)
-		# Transform to dim space
-		curr_min_other_dim, curr_max_other_dim, curr_min_dim, curr_max_dim = convert_to_dim(min_x, max_x, min_y, max_y, dim)
-		# Filter the boxes to get the target boxes
-		indices = np.ones(all_corners.shape[0], dtype=bool)
-		indices[object_idx] = False
-		other_boxes = all_corners[indices]
-		other_boxes_max_other_dim = other_boxes[:,:,other_dim].max(axis=1) # N 
-		other_boxes_min_other_dim = other_boxes[:,:,other_dim].min(axis=1) # N
-		target_boxes = other_boxes[~np.logical_or(other_boxes_max_other_dim <= curr_min_other_dim, 
-									other_boxes_min_other_dim >= curr_max_other_dim)]
-		if target_boxes.shape[0] == 0:
-			return np.array([(DIM_MIN-curr_min_dim, DIM_MAX-curr_max_dim)])
-
-		target_coord_dims_min = np.min(target_boxes[:,:,dim], axis=1) # N
-		target_coord_dims_max = np.max(target_boxes[:,:,dim], axis=1) # N
-		sorted_indices = np.argsort(target_coord_dims_min) # N
-		target_coord_dims_min, target_coord_dims_max = target_coord_dims_min[sorted_indices], target_coord_dims_max[sorted_indices]
-		
-		target_coord_dims_max = np.insert(target_coord_dims_max, 0, DIM_MIN)
-		target_coord_dims_min = np.append(target_coord_dims_min, [DIM_MAX])
-
-		diffs = target_coord_dims_min - target_coord_dims_max # (N+1,)
-		target_coord_dims = np.stack([target_coord_dims_max, target_coord_dims_min], axis=1) # (N+1, 2)
-		eligible_coord_dims = target_coord_dims[diffs >= (curr_max_dim - curr_min_dim)] # (M, 2)
-		eligible_translation_extents = eligible_coord_dims - np.array([curr_min_dim, curr_max_dim]) # (M, 2)
-		return eligible_translation_extents
-		
-	
-	def next(self, all_corners, areas, extents, num_neighbours=1):
+	def next(self, all_corners, extents, num_neighbours=1):
 		all_new_corners = []
 
 		for n in range(num_neighbours):
@@ -123,8 +33,8 @@ class Generator():
 				dim = 0
 			else:
 				dim = 1
-			new_corners = self.translate(all_corners.copy(), areas, extents, dim, obj_index)
-			all_new_corners.append(self.translate(new_corners, areas, extents, 1-dim, obj_index))
+			new_corners = teleport(all_corners.copy(), extents, dim, obj_index)
+			all_new_corners.append(teleport(new_corners, extents, 1-dim, obj_index))
 
 		return np.stack(all_new_corners, axis=0)	# 20 x num_objects x 4 x 3
 	
@@ -134,21 +44,21 @@ class Generator():
 		scores = F.softmax(self.model(images).view(-1), dim=-1)
 		return scores.cpu().numpy()
 	
-	def hill_climbing(self, all_corners, areas, labels, heights, extents, num_neighbours=20, beam_width=5, num_steps=2):
+	def hill_climbing(self, all_corners, labels, heights, extents, num_neighbours=20, beam_width=5, num_steps=2):
 		all_corners_list = all_corners[None, :, :, :]	# 1 x num_objs x 4 x 3
 		top_images = []
 		for step in range(num_steps):
 			all_new_corners_list = []
 			for all_corners in all_corners_list:
-				all_new_corners_list.append(self.next(all_corners, areas, extents, num_neighbours))	# 20 x num_objects x 4 x 3
+				all_new_corners_list.append(self.next(all_corners, extents, num_neighbours))	# 20 x num_objects x 4 x 3
 
 
 			# Concatenate new and old corners and pass through model to get scores
 			all_new_corners_list.append(all_corners_list)
 			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21 x num_objects x 4 x 3
 			
-			# TODO: Use gen_masked_stack_2(...) here
-			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, heights)[1])
+			image_extents = (extents[1]-extents[0], extents[3]-extents[2])
+			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, heights, image_extents))
 						for all_corners in all_new_corners_list]
 			
 			if step == 0:
@@ -170,7 +80,7 @@ class Generator():
 		print(top_images)
 		print("===================")
 		top_images[0].save("0.png")
-		top_images[0].save('out.gif', save_all=True, append_images=top_images[1:], fps=0.1, loop=0)
+		top_images[0].save('out.gif', save_all=True, append_images=top_images[1:], fps=0.1, loop=0, optimize=False)
 		
 		return all_corners_list
 
@@ -180,4 +90,4 @@ if __name__ == '__main__':
 	# print(generator.get_teleportation_extents(all_corners2, extents2, 1, index2))
 	from src.test_hill_climbing import *
 	generator = Generator()
-	generator.hill_climbing(np.array(corners), np.array(areas), np.array(labels), np.array(heights), np.array(extents))
+	generator.hill_climbing(np.array(corners), np.array(labels), np.array(heights), np.array(extents))

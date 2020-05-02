@@ -156,6 +156,7 @@ class SUNRGBD(Dataset):
 		map_image = np.argmax(heights, axis=0) + 1
 		obj_absent_mask = np.sum(masks, axis=0) == 0
 		map_image[obj_absent_mask] = 0.0
+		map_image = np.tile(np.uint8(map_image * (255.0/len(SUNRGBD._classes)))[:,:,None], (1,1,3))
 		return map_image
 
 	def convert_masked_stack_to_height(self, image):

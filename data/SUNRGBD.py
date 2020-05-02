@@ -7,6 +7,8 @@ from tqdm import tqdm
 from scipy.io import loadmat
 from matplotlib.path import Path
 import matplotlib.pyplot as plt
+import itertools
+from collections import Counter
 
 from torch.utils.data import Dataset
 from data.filter import get_filtered_indices
@@ -14,7 +16,7 @@ from data.filter import get_filtered_indices
 from shapely.geometry import Polygon
 
 from config.config import cfg
-from src.geom_transforms import compute_eligibility, shuffle_scene, get_total_extents, scale_boxes, get_extents_of_boxes
+from src.geom_transforms import compute_eligibility, shuffle_scene, get_total_extents, scale_boxes, get_extents_of_boxes, is_contained
 from data.make_random_configurations import make_random_configuration
 
 from torchvision.transforms import Compose
@@ -303,9 +305,28 @@ class SUNRGBD(Dataset):
 		return image, random_image
 
 if __name__ == '__main__':
+	# data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
+	# filtered_indices = get_filtered_indices(data)
+	# train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
+	# train_dataset[0]
+	# val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
+	# data_obj[0]
 	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
 	filtered_indices = get_filtered_indices(data)
 	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-	train_dataset[0]
-	# val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
-	# data_obj[0]
+	stats = Counter()
+	img_stats = {}
+	for img_id, scene in enumerate(train_dataset.img_corner_list):
+		num_boxes = len(scene['vertices'])
+		boxes = scene['vertices']
+		labels = scene['labels']
+		for i, j in itertools.permutations(range(num_boxes), 2):
+			if is_contained(boxes[i], boxes[j]):
+				key = (SUNRGBD._classes[labels[i]], SUNRGBD._classes[labels[j]])
+				if key == ('desk', 'desk'):
+					train_dataset[img_id]
+				stats[key] += 1
+				img_list = img_stats.setdefault(key, [])
+				img_list.append(train_dataset.image_path_at(img_id))
+	print(stats)
+	import pdb; pdb.set_trace()

@@ -139,13 +139,21 @@ def translate(all_corners, areas, extents, dim, obj_index):
 	return all_corners
 
 def teleport(all_corners, extents, dim, obj_index):
-		teleportation_extents = get_teleportation_extents(all_corners, extents, dim, obj_index)
-		if teleportation_extents.shape[0] > 0:
-			idx = np.random.choice(teleportation_extents.shape[0])
-			d_min, d_max = teleportation_extents[idx]
-			dv = np.random.uniform(d_min, d_max)
-			all_corners[obj_index,:, dim] += dv
-		return all_corners
+	teleportation_extents = get_teleportation_extents(all_corners, extents, dim, obj_index)
+	if teleportation_extents.shape[0] > 0:
+		idx = np.random.choice(teleportation_extents.shape[0])
+		d_min, d_max = teleportation_extents[idx]
+		dv = np.random.uniform(d_min, d_max)
+		all_corners[obj_index,:, dim] += dv
+	return all_corners
+
+def rotate(all_corners, extents, obj_index, angle):
+	current_box = all_corners[obj_index]
+	rotated_box = rotate_box(current_box, angle)
+	other_box_indices = np.ones(all_corners.shape[0], dtype=bool)
+	other_box_indices[obj_index] = False
+	other_boxes = all_corners[other_box_indices] # N x 4 x 2
+	
 
 def calculate_diameter(corners):
 	assert len(corners.shape) == 2

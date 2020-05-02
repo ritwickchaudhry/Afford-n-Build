@@ -282,36 +282,18 @@ class SUNRGBD(Dataset):
 		image = SUNRGBD.gen_masked_stack(bboxes, labels, heights, extents)
 		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, heights, extents)
 
-		map_image = SUNRGBD.convert_masked_stack_to_map(image)
-		# SUNRGBD.viz_map_image(map_image)
-		
-		random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
-		# SUNRGBD.viz_map_image(random_map_image)
-		
-		SUNRGBD.viz_pair_map_images(map_image, random_map_image)
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
 		# -----------------------------------------------------------	
-		# map_image = self.convert_masked_stack_to_map(image)
-		# self.viz_map_image(map_image)
-	
-		# image = self.transform(image)
-
-		# map_image = self.convert_masked_stack_to_map(image)
-		# self.viz_map_image(map_image)
-
-		# height_image = self.convert_masked_stack_to_height(image)
-		# self.viz_map_image(height_image)
+		# map_image = SUNRGBD.convert_masked_stack_to_map(image)
+		# random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
+		# SUNRGBD.viz_pair_map_images(map_image, random_map_image)
 		# -----------------------------------------------------------
+
 		# image - num_classes x H x W
 		image = self.transform(image)
 		random_image = self.transform(random_image)
 		
-		# map_image = self.convert_masked_stack_to_map(image)
-		# SUNRGBD.viz_map_image(map_image)
-		# map_image = self.convert_masked_stack_to_map(random_image)
-		# SUNRGBD.viz_map_image(map_image)
-
 		return image, random_image
 
 if __name__ == '__main__':

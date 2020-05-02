@@ -41,6 +41,15 @@ class Trainer:
 
         self.logger = SummaryWriter()
 
+    def save(self, batch_index, val_loss):
+        ckpt = {
+            'params': self.model.state_dict(),
+            'optim' : self.optimizer.state_dict(),
+            'batch' : batch_index,
+            'val_loss': val_loss
+        }
+        torch.save(ckpt, 'ckpt.pth')
+
     def criterion(self, pos_scores, neg_scores):
         return F.relu(neg_scores - pos_scores + cfg['hinge_loss_margin']).mean(dim=0)
     
@@ -74,6 +83,7 @@ class Trainer:
                         iteration, val_loss))
                 self.logger.add_scalars('Loss', {'val':val_loss}, iteration)
                 self.lr_scheduler.step(val_loss)
+                self.save(batch_idx, val_loss)
 
             loss.backward()
             self.optimizer.step()

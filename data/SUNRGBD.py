@@ -151,6 +151,13 @@ class SUNRGBD(Dataset):
 	def viz_map_image(image):
 		plt.imshow(image, cmap='jet')
 		plt.show()
+	
+	@staticmethod
+	def viz_pair_map_images(image1, image2):
+		fig, ax = plt.subplots(1,2)
+		ax[0].imshow(image1, cmap='jet')
+		ax[1].imshow(image2, cmap='jet')
+		plt.show()
 
 	def gen_map(self, boxes, labels):
 		'''
@@ -198,11 +205,11 @@ class SUNRGBD(Dataset):
 		return height_image
 
 	def get_bboxdb(self):
-		# cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
-		# if os.path.exists(cache_path):
-		# 	print('Loading bboxdb from cached file')
-		# 	self.img_corner_list = pickle.load(open(cache_path, 'rb'))
-		# 	return
+		cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
+		if os.path.exists(cache_path):
+			print('Loading bboxdb from cached file')
+			self.img_corner_list = pickle.load(open(cache_path, 'rb'))
+			return
 
 		total_eligible_scenes, total_scenes = np.array([0,0,0,0,0]), 0
 		self.img_corner_list = []
@@ -269,14 +276,19 @@ class SUNRGBD(Dataset):
 		labels = self.img_corner_list[index]['labels']
 		heights = self.img_corner_list[index]['heights']
 		
-		shuffled_boxes = shuffle_scene(bboxes[:,:,:2])
+		shuffled_boxes = shuffle_scene(bboxes[:,:,:2].copy())
 		extents = get_total_extents(bboxes, shuffled_boxes)
 
 		image = SUNRGBD.gen_masked_stack(bboxes, labels, heights, extents)
 		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, heights, extents)
-		# random_map_image = self.convert_masked_stack_to_map(random_image)
-		# self.viz_map_image(random_map_image)
+
+		map_image = SUNRGBD.convert_masked_stack_to_map(image)
+		# SUNRGBD.viz_map_image(map_image)
 		
+		random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
+		# SUNRGBD.viz_map_image(random_map_image)
+		
+		SUNRGBD.viz_pair_map_images(map_image, random_map_image)
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
 		# -----------------------------------------------------------	

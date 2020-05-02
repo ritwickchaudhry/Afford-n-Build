@@ -5,6 +5,19 @@ import numpy as np
 from src.utils import get_extents
 from config.config import cfg
 
+from src.utils_geom import translation_mat, rotation_mat, \
+						apply_transform
+
+def rotate_box(corners, angle):
+	assert len(corners.shape) == 2 and corners.shape[1] == 2, "Shape: {}".format(corners.shape)
+	centroid = (corners[0] + corners[2])/2
+	T1 = translation_mat(-centroid[0], -centroid[1])
+	R = rotation_mat(angle)
+	# R = np.eye(3)
+	T2 = translation_mat(centroid[0], centroid[1])
+	new_corners = apply_transform(corners, T2 @ R @ T1)
+	return new_corners
+
 def get_extents_of_box(box):
 	# assert box.shape == (4,3)
 	xs = box[:,0]
@@ -183,8 +196,14 @@ def shuffle_scene(all_corners):
 			displacements = centroids - selected_grid_points # N x 2
 			all_corners = all_corners - displacements[:,None,:]
 			break
+
+	# Rotate all boxes
+	for idx in range(all_corners.shape[0]):
+		if np.random.rand() < cfg['rotate_probability']:
+			all_corners[idx] = rotate_box(all_corners[idx], 90)
+
 	# Now translate around a bit for better packing
-	for i in range(2*pad):
+	for i in range(pad):
 		extents = get_extents(all_corners)
 		all_new_corners, new_corners = [], []
 		for idx in range(all_corners.shape[0]):

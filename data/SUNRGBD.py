@@ -123,6 +123,45 @@ class SUNRGBD(Dataset):
 			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
 			image = SUNRGBD.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
 		return (x_min, x_max, y_min, y_max), image
+	
+	@staticmethod
+	def scale_boxes_2(boxes, extents):
+		x_min, y_min = boxes[:,:,0].min(), boxes[:,:,1].min()
+		x_diff, y_diff = extents
+		scale = cfg['H']/max(x_diff, y_diff)
+		boxes[:,:,0] = boxes[:,:,0] - x_min
+		boxes[:,:,1] = boxes[:,:,1] - y_min
+		boxes = boxes * scale
+		return boxes, math.ceil(y_diff*scale), math.ceil(x_diff*scale)
+	
+	@staticmethod
+	def gen_masked_stack_2(boxes, labels, heights, extents):
+		num_classes = len(SUNRGBD._classes)
+		boxes, H, W = self.scale_boxes_2(boxes)
+		image = np.zeros((2 * num_classes, H, W), dtype=np.float) # Even channels - masks
+		h_min = np.min(heights)
+		h_max = np.max(heights)
+		for box, label, height in zip(boxes, labels, heights):
+			if h_max == h_min:
+				rescaled_height = 0.0
+			else:	
+				rescaled_height = (height-h_min)/(h_max-h_min)
+			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
+			image = SUNRGBD.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
+		return image
+	
+	@staticmethod
+	def get_extents(boxes):
+		x_min, x_max = boxes[:,:,0].min(), boxes[:,:,0].max()
+		y_min, y_max = boxes[:,:,1].min(), boxes[:,:,1].max()
+		x_diff, y_diff = (x_max - x_min), (y_max - y_min)
+		return x_diff, y_diff
+
+	@staticmethod
+	def get_total_extents(boxes, random_boxes):
+		x_diff, y_diff = get_extents(boxes)
+		x_diff_random, y_diff_random = get_extents(random_boxes)
+		return max(x_diff, x_diff_random), max(y_diff, y_diff_random)
 
 	@staticmethod
 	def viz_map_image(image):
@@ -272,7 +311,18 @@ class SUNRGBD(Dataset):
 		# SUNRGBD.viz_map_image(map_image)
 
 		return image, random_image
-
+	
+	def __getitem__2(self, index):
+		bboxes = self.img_corner_list[index]['vertices']
+		labels = self.img_corner_list[index]['labels']
+		heights = self.img_corner_list[index]['heights']
+		random_bboxes = make_random_configuration_2(bboxes, self.img_corner_list[index]['areas'])
+		extents = get_total_extents(bboxes, random_bboxes)
+		image = SUNRGBD.gen_masked_stack_2(boxes, labels, heights, extents)
+		random_image = SUNRGBD.gen_masked_stack_2(random_bboxes, labels, heights, extents)
+		image = self.transform(image)
+		random_image = self.transform(random_image)
+		return image, random_image
 
 if __name__ == '__main__':
 	val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')

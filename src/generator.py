@@ -64,10 +64,53 @@ class Generator():
 		return (curr_min_dim - before_extent, after_extent - curr_max_dim)
 
 	def translate(self, all_corners, areas, extents, dim, obj_index):
-		d_min, d_max = self.get_translation_extent(all_corners, areas, extents, dim, obj_index)
-		dv = np.random.uniform(-d_min, d_max)
-		all_corners[obj_index,:, dim] += dv
+		teleportation_extents = self.get_teleportation_extents(all_corners, extents, dim, obj_index)
+		if teleportation_extents.shape[0] > 0:
+			idx = np.random.choice(teleportation_extents.shape[0])
+			d_min, d_max = teleportation_extents[idx]
+			dv = np.random.uniform(d_min, d_max)
+			all_corners[obj_index,:, dim] += dv
 		return all_corners
+	
+	def get_teleportation_extents(self, all_corners, extents, dim, object_idx):
+		'''
+			Invariant - Assuming the MBRs of the boxes don't overlap for the input
+		'''
+		assert dim == 0 or dim == 1,  "Only for x and y"
+		# import pdb; pdb.set_trace()
+		X_MIN, X_MAX, Y_MIN, Y_MAX = extents
+		OTHER_DIM_MIN, OTHER_DIM_MAX, DIM_MIN, DIM_MAX = convert_to_dim(*extents, dim)
+
+		other_dim = 1-dim
+		# Get the MBR of the current object
+		curr_object_box = all_corners[object_idx] # 4 x 3
+		min_x, max_x, min_y, max_y = get_extents_of_box(curr_object_box)
+		# Transform to dim space
+		curr_min_other_dim, curr_max_other_dim, curr_min_dim, curr_max_dim = convert_to_dim(min_x, max_x, min_y, max_y, dim)
+		# Filter the boxes to get the target boxes
+		indices = np.ones(all_corners.shape[0], dtype=bool)
+		indices[object_idx] = False
+		other_boxes = all_corners[indices]
+		other_boxes_max_other_dim = other_boxes[:,:,other_dim].max(axis=1) # N 
+		other_boxes_min_other_dim = other_boxes[:,:,other_dim].min(axis=1) # N
+		target_boxes = other_boxes[~np.logical_or(other_boxes_max_other_dim <= curr_min_other_dim, 
+									other_boxes_min_other_dim >= curr_max_other_dim)]
+		if target_boxes.shape[0] == 0:
+			return np.array([(DIM_MIN-curr_min_dim, DIM_MAX-curr_max_dim)])
+
+		target_coord_dims_min = np.min(target_boxes[:,:,dim], axis=1) # N
+		target_coord_dims_max = np.max(target_boxes[:,:,dim], axis=1) # N
+		sorted_indices = np.argsort(target_coord_dims_min) # N
+		target_coord_dims_min, target_coord_dims_max = target_coord_dims_min[sorted_indices], target_coord_dims_max[sorted_indices]
+		
+		target_coord_dims_max = np.insert(target_coord_dims_max, 0, DIM_MIN)
+		target_coord_dims_min = np.append(target_coord_dims_min, [DIM_MAX])
+
+		diffs = target_coord_dims_min - target_coord_dims_max # (N+1,)
+		target_coord_dims = np.stack([target_coord_dims_max, target_coord_dims_min], axis=1) # (N+1, 2)
+		eligible_coord_dims = target_coord_dims[diffs >= (curr_max_dim - curr_min_dim)] # (M, 2)
+		eligible_translation_extents = eligible_coord_dims - np.array([curr_min_dim, curr_max_dim]) # (M, 2)
+		return eligible_translation_extents
 		
 	
 	def next(self, all_corners, areas, extents, num_neighbours=1):
@@ -75,9 +118,13 @@ class Generator():
 
 		for n in range(num_neighbours):
 			obj_index = np.random.choice(all_corners.shape[0])
-			
-			new_corners = self.translate(all_corners.copy(), areas, extents, 0, obj_index)
-			all_new_corners.append(self.translate(new_corners, areas, extents, 1, obj_index))
+			p = np.random.random_sample()
+			if p < 0.5:
+				dim = 0
+			else:
+				dim = 1
+			new_corners = self.translate(all_corners.copy(), areas, extents, dim, obj_index)
+			all_new_corners.append(self.translate(new_corners, areas, extents, 1-dim, obj_index))
 
 		return np.stack(all_new_corners, axis=0)	# 20 x num_objects x 4 x 3
 	
@@ -100,6 +147,7 @@ class Generator():
 			all_new_corners_list.append(all_corners_list)
 			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21 x num_objects x 4 x 3
 			
+			# TODO: Use gen_masked_stack_2(...) here
 			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, heights)[1])
 						for all_corners in all_new_corners_list]
 			
@@ -127,9 +175,9 @@ class Generator():
 		return all_corners_list
 
 if __name__ == '__main__':
-	# from test import *
+	# from src.test import *
 	# generator = Generator()
-	# print(generator.get_translation_extent(all_corners1, None, extents1, 1, index1))
+	# print(generator.get_teleportation_extents(all_corners2, extents2, 1, index2))
 	from src.test_hill_climbing import *
 	generator = Generator()
 	generator.hill_climbing(np.array(corners), np.array(areas), np.array(labels), np.array(heights), np.array(extents))

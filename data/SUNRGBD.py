@@ -9,10 +9,12 @@ from matplotlib.path import Path
 import matplotlib.pyplot as plt
 
 from torch.utils.data import Dataset
+from data.filter import get_filtered_indices
 
 from shapely.geometry import Polygon
 
 from config.config import cfg
+from src.geom_transforms import compute_eligibility, shuffle_scene
 from data.make_random_configurations import make_random_configuration
 
 from torchvision.transforms import Compose
@@ -181,6 +183,7 @@ class SUNRGBD(Dataset):
 			self.img_corner_list = pickle.load(open(cache_path, 'rb'))
 			return
 
+		total_eligible_scenes, total_scenes = np.array([0,0,0,0,0]), 0
 		self.img_corner_list = []
 		for scene in tqdm(self.data):
 			corners_list = []
@@ -219,10 +222,14 @@ class SUNRGBD(Dataset):
 			label_list = np.stack(label_list)
 			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, "areas": area_list,
 											"heights": height_list})
-		
+			elgibilities, _, _ = compute_eligibility(corners_list, max_pad=5)
+			total_eligible_scenes += np.array([int(x) for x in elgibilities])
+			total_scenes += 1
+
 		if not os.path.exists(self.cache_dir):
 			os.mkdir(self.cache_dir)
 		pickle.dump(self.img_corner_list, open(cache_path, "wb"))
+		print("Total :{}, Eligible: {}".format(total_scenes, total_eligible_scenes))
 		return
 	
 	def get_IoU(self, corners_1, corners_2):
@@ -240,7 +247,14 @@ class SUNRGBD(Dataset):
 		labels = self.img_corner_list[index]['labels']
 		heights = self.img_corner_list[index]['heights']
 		
+		shuffled_boxes = shuffle_scene(bboxes[:,:,:2])
 		extents, image = SUNRGBD.gen_masked_stack(bboxes, labels, heights)
+		map_image = self.convert_masked_stack_to_map(image)
+		self.viz_map_image(map_image)
+
+		extents, image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, heights)
+		map_image = self.convert_masked_stack_to_map(image)
+		self.viz_map_image(map_image)
 		
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
@@ -275,5 +289,9 @@ class SUNRGBD(Dataset):
 
 
 if __name__ == '__main__':
-	val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
-	data_obj[0]
+	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
+	filtered_indices = get_filtered_indices(data)
+	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
+	train_dataset[2]
+	# val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
+	# data_obj[0]

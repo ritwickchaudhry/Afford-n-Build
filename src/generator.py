@@ -30,7 +30,7 @@ class Generator():
 
 		for n in range(num_neighbours):
 			p = np.random.random_sample()
-			if p < 1.0:
+			if p < cfg['place_on_top_prob']:
 				new_corners, new_tiers = self.next_place_on_top(all_corners, tiers)
 			else:
 				new_corners, new_tiers = self.next_teleport(all_corners, tiers, extents)
@@ -121,9 +121,9 @@ if __name__ == '__main__':
 	# from src.test import *
 	# generator = Generator()
 	# print(generator.get_teleportation_extents(all_corners2, extents2, 1, index2))
-	from src.test_hill_climbing import *
-	generator = Generator()
-	generator.hill_climbing(np.array(corners), np.array(labels), np.array(tiers), np.array(extents), num_steps=5)
+	# from src.test_hill_climbing import *
+	# generator = Generator()
+	# generator.hill_climbing(np.array(corners), np.array(labels), np.array(tiers), np.array(extents), num_steps=5)
 
 
 	#####

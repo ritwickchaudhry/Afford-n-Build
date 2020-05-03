@@ -21,7 +21,7 @@ all_corners2 = np.array(
     ]
 )
 index2 = 3
-extents2 = [-1,22,-1,12]
+extents2 = [-3,10,-1,12]
 
 all_corners3 = np.array(
     [
@@ -30,5 +30,24 @@ all_corners3 = np.array(
     ]
 )
 
+all_corners4 = np.array(
+    [
+        [[0.0,0],[4,4],[2,6],[-2,2]],
+        [[2,6],[2,7],[3,7],[3,6]]
+    ]
+)
+tiers4 = np.array([0.5,0.5])
+extents4 = [-3,10,-1,12]
 idx1 = 1
 idx2 = 0
+
+all_corners5 = np.array(
+    [
+        [[0,0],[6,0],[6,4],[0,4]],
+        [[1.5,0.5],[2,1.5],[1.5,2.5],[1,1.5]],
+        [[-3,1],[-3,3],[-1,3],[-1,1]]
+    ]
+)
+extents5 = [-3.5,10,-1,5]
+tiers5 = np.array([0.5,1,0.5])
+idx5=1

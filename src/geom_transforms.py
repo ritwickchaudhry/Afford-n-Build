@@ -53,6 +53,7 @@ def is_smaller(box1, box2):
 	return (H1 <= H2 and W1 <= W2)
 
 def is_contained(inner_box, outer_box):
+	# import pdb; pdb.set_trace()
 	outer_box = Polygon(outer_box[:,:2])
 	inner_points = MultiPoint(inner_box[:,:2])
 	return outer_box.contains(inner_points)
@@ -120,7 +121,13 @@ def get_translation_extent(all_corners, areas, extents, dim, object_idx):
 	after_extent = target_boxes[after_box_indices,:,dim].min() if after_box_indices is not None else DIM_MAX
 	return (before_extent - curr_min_dim, after_extent - curr_max_dim)
 
-def get_teleportation_extents(all_corners, extents, dim, object_idx):
+def get_child_indices(all_corners, object_idx):
+	parent_object = all_corners[object_idx]
+	children = np.array(list(map(lambda x : is_contained(x,parent_object), all_corners)))
+	children[object_idx] = False
+	return children
+
+def get_teleportation_extents(all_corners, extents, dim, object_idx, child_indices):
 		'''
 			Invariant - Assuming the MBRs of the boxes don't overlap for the input
 		'''
@@ -136,11 +143,15 @@ def get_teleportation_extents(all_corners, extents, dim, object_idx):
 		# Transform to dim space
 		curr_min_other_dim, curr_max_other_dim, curr_min_dim, curr_max_dim = convert_to_dim(min_x, max_x, min_y, max_y, dim)
 		# Filter the boxes to get the target boxes
-		indices = np.ones(all_corners.shape[0], dtype=bool)
+		indices = ~child_indices
 		indices[object_idx] = False
+
+		# Filter out this box and children
 		other_boxes = all_corners[indices]
+
 		other_boxes_max_other_dim = other_boxes[:,:,other_dim].max(axis=1) # N 
 		other_boxes_min_other_dim = other_boxes[:,:,other_dim].min(axis=1) # N
+
 		target_boxes = other_boxes[~np.logical_or(other_boxes_max_other_dim <= curr_min_other_dim, 
 									other_boxes_min_other_dim >= curr_max_other_dim)]
 		if target_boxes.shape[0] == 0:
@@ -209,13 +220,14 @@ def translate(all_corners, areas, extents, dim, obj_index):
 	return all_corners
 
 def teleport(all_corners, extents, tiers, dim, obj_index):
-	# TODO: Need to handle case where a (tier 1 object that has a tier 2 object on top of it) is moved
-	teleportation_extents = get_teleportation_extents(all_corners, extents, dim, obj_index)
+	child_indices = get_child_indices(all_corners, obj_index)
+	teleportation_extents = get_teleportation_extents(all_corners, extents, dim, obj_index, child_indices)
 	if teleportation_extents.shape[0] > 0:
 		idx = np.random.choice(teleportation_extents.shape[0])
 		d_min, d_max = teleportation_extents[idx]
 		dv = np.random.uniform(d_min, d_max)
 		all_corners[obj_index,:, dim] += dv
+		all_corners[child_indices, :, dim] += dv
 		tiers[obj_index] = cfg['TIERS'][0]
 	return all_corners, tiers
 
@@ -321,4 +333,6 @@ def shuffle_scene(all_corners):
 
 if __name__ == '__main__':
 	from src.test import *
-	print(rotate(all_corners1, extents1, -1, 90))
+	out = teleport(all_corners5.copy(), extents5, tiers5.copy(), 0, idx5)
+	import pdb; pdb.set_trace()
+	# print(rotate(all_corners1, extents1, -1, 90))

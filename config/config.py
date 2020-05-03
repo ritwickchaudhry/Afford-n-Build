@@ -16,6 +16,8 @@ cfg = {
  				"lamp", "monitor", "night_stand", "pillow", "sink", 
 				 "sofa", "table", "tv", "toilet"),
 	'TIERS': [0.5, 1.0],
+	# Hill Climbing
+	'place_on_top_prob': 0.5,
 	# Trainer configs
 	'data_root': 'dataset/',
 	'cache_dir': 'cache/',

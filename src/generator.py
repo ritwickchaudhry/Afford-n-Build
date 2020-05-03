@@ -67,25 +67,34 @@ class Generator():
 	
 	def hill_climbing(self, all_corners, labels, tiers, extents, num_neighbours=20, beam_width=5, num_steps=2):
 		# TODO: Handle the new tiers that are returned by self.next(...)
-		all_corners_list = all_corners[None, :, :, :]	# 1 x num_objs x 4 x 3
+		all_corners_list = all_corners[None,...]	# 1 x num_objs x 4 x 3
+		all_tiers_list = tiers[None,...]			# 1 x num_objects
 		top_images = []
 		for step in range(num_steps):
 			all_new_corners_list = []
+			all_new_tiers_list = []
 			for all_corners in all_corners_list:
-				all_new_corners_list.append(self.next(all_corners, tiers, extents, num_neighbours)[0])	# 20 x num_objects x 4 x 3
-
+				all_new_corners, all_new_tiers = self.next(all_corners, tiers, extents, num_neighbours)
+				all_new_corners_list.append(all_new_corners)
+				all_new_tiers_list.append(all_new_tiers)
 
 			# Concatenate new and old corners and pass through model to get scores
 			all_new_corners_list.append(all_corners_list)
+			all_new_tiers_list.append(all_tiers_list)
 			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21/105 x num_objects x 4 x 3
+			all_new_tiers_list = np.concatenate(all_new_tiers_list, axis=0)		# 21/105 x num_objects
+
 			
 			image_extents = (extents[1]-extents[0], extents[3]-extents[2])
 			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, tiers, image_extents))
-						for all_corners in all_new_corners_list]
+						for all_corners, tiers in zip(all_new_corners_list, all_new_tiers_list)]
 			
+
 			if step == 0:
-				# SUNRGBD.viz_map_image(SUNRGBD.convert_masked_stack_to_map(images[0]))
-				# SUNRGBD.viz_map_image(SUNRGBD.convert_masked_stack_to_map(images[-1]))
+				SUNRGBD.viz_pair_map_images(SUNRGBD.convert_masked_stack_to_map(images[-1]),
+											SUNRGBD.convert_masked_stack_to_map(images[0]))
+				SUNRGBD.viz_pair_map_images(SUNRGBD.convert_masked_stack_to_map(images[-1]),
+											SUNRGBD.convert_masked_stack_to_map(images[0]))
 				top_images.append(SUNRGBD.convert_masked_stack_to_map(images[-1]))
 
 			images = torch.Tensor(np.stack(images, axis=0)).to(self.device)
@@ -93,7 +102,9 @@ class Generator():
 			
 			# Pick top beam-width number of configurations w/o replacement
 			top_indices = np.random.choice(images.shape[0], beam_width, replace=False, p=scores)
-			all_corners_list = np.stack(all_new_corners_list, axis=0)[top_indices]
+			all_corners_list = all_new_corners_list[top_indices]
+			all_tiers_list = all_new_tiers_list[top_indices]
+
 			# Save top image in gif
 			top_image = images[top_indices[np.argmax(scores[top_indices])]].cpu().numpy()
 			top_image = SUNRGBD.convert_masked_stack_to_map(top_image)	# 128 x 128

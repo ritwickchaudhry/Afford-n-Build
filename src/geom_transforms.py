@@ -147,12 +147,40 @@ def teleport(all_corners, extents, dim, obj_index):
 		all_corners[obj_index,:, dim] += dv
 	return all_corners
 
+def is_overlap(curr_min, curr_max, other_min, other_max):
+	return np.maximum(curr_min, other_min) < np.minimum(curr_max, other_max)
+
 def rotate(all_corners, extents, obj_index, angle):
-	current_box = all_corners[obj_index]
-	rotated_box = rotate_box(current_box, angle)
+	current_box = all_corners[obj_index] # 4 x 2
+	rotated_box = rotate_box(current_box, angle) # 4 x 2
+	min_x, max_x, min_y, max_y = get_extents_of_box(rotated_box)
+	
 	other_box_indices = np.ones(all_corners.shape[0], dtype=bool)
 	other_box_indices[obj_index] = False
 	other_boxes = all_corners[other_box_indices] # N x 4 x 2
+	other_min_x, other_max_x = other_boxes[:,:,0].min(axis=1), other_boxes[:,:,0].max(axis=1) # N
+	other_min_y, other_max_y = other_boxes[:,:,1].min(axis=1), other_boxes[:,:,1].max(axis=1) # N
+
+	x_overlap = is_overlap(min_x, max_x, other_min_x, other_max_x)
+	y_overlap = is_overlap(min_y, max_y, other_min_y, other_max_y)
+
+	# x_contained = np.logical_or(np.logical_and(min_x < other_max_x, min_x > other_min_x),
+	# 							np.logical_and(max_x < other_max_x, max_x > other_min_x))
+	# y_contained = np.logical_or(np.logical_and(min_y < other_max_y, min_y > other_min_y),
+	# 							np.logical_and(max_y < other_max_y, max_y > other_min_y))
+	any_overlap = np.sum(np.logical_and(x_overlap, y_overlap)) > 0
+
+	if any_overlap:
+		return current_box, False
+	# Check with the extents
+	X_MIN, X_MAX, Y_MIN, Y_MAX = extents
+	is_valid_x = np.logical_and(rotated_box[:,0] >= X_MIN, rotated_box[:,0] <= X_MAX).sum() == 4
+	is_valid_y = np.logical_and(rotated_box[:,1] >= Y_MIN, rotated_box[:,1] <= Y_MAX).sum() == 4
+
+	if is_valid_x and is_valid_y:
+		return rotated_box, True
+	else:
+		return current_box, False
 	
 
 def calculate_diameter(corners):
@@ -218,3 +246,7 @@ def shuffle_scene(all_corners):
 			new_corners = translate(all_corners.copy(), None, extents, 0, idx)
 			all_corners = translate(new_corners, None, extents, 1, idx)
 	return np.array(all_corners)
+
+if __name__ == '__main__':
+	from src.test import *
+	print(rotate(all_corners1, extents1, -1, 90))

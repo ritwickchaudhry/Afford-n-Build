@@ -34,11 +34,6 @@ class SUNRGBD(Dataset):
 			self.data = data
 		else:
 			self.data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
-		# SUNRGBD._classes = SUNRGBD._classes =  ('wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture', 
-		# 		'counter', 'blinds', 'desk', 'shelves', 'curtain', 'dresser', 'pillow', 'mirror', 'floor mat', 'clothes', 
-		# 		'ceiling', 'books', 'fridge', 'tv', 'paper', 'towel', 'shower curtain', 'box', 'whiteboard', 'person', 
-		# 		'night_stand', 'toilet', 'sink', 'lamp', 'bathtub', 'bag', 'ottoman', 'dresser_mirror', 'drawer')
-		# SUNRGBD._classes = cfg['CLASSES']
 		self.label_to_index = {label:index for index,label in enumerate(SUNRGBD._classes)}
 		self.get_bboxdb()
 		self.transform = Compose([
@@ -79,7 +74,7 @@ class SUNRGBD(Dataset):
 		return image
 
 	@staticmethod
-	def add_masked_oriented_stack(image, box, label, height):
+	def add_masked_oriented_stack(image, box, label, tier):
 		C, H, W = image.shape
 		poly_path = Path(box)
 		y, x = np.mgrid[:H, :W]
@@ -87,67 +82,19 @@ class SUNRGBD(Dataset):
 		mask = poly_path.contains_points(coords).reshape(H,W)
 		# NOTE: Can change this to incorporate multiple objects
 		# of the same class by incrementing the mask
-		image[2*label, mask] = 1.0
-		image[2*label+1, mask] = height
+		image[label, mask] = tier
 		return image
-
-	# OLD METHOD
-	# @staticmethod
-	# def scale_boxes(boxes):
-	# 	x_min, x_max = boxes[:,:,0].min(), boxes[:,:,0].max()
-	# 	y_min, y_max = boxes[:,:,1].min(), boxes[:,:,1].max()
-	# 	x_diff, y_diff = (x_max - x_min), (y_max - y_min)
-	# 	scale = cfg['H']/max(x_diff, y_diff)
-	# 	boxes[:,:,0] = boxes[:,:,0] - x_min
-	# 	boxes[:,:,1] = boxes[:,:,1] - y_min
-	# 	boxes = boxes * scale
-	# 	return boxes, math.ceil(y_diff*scale), math.ceil(x_diff*scale), x_min, x_max, y_min, y_max
-	
-	# def gen_stack(self, boxes, labels, heights):
-	# 	num_classes = len(SUNRGBD._classes)
-	# 	boxes, H, W, x_min, x_max, y_min, y_max = SUNRGBD.scale_boxes(boxes)
-	# 	image = np.zeros((num_classes, H, W), dtype=np.uint8)
-	# 	h_min = np.min(heights)
-	# 	h_max = np.max(heights)
-	# 	for box, label, height in zip(boxes, labels, heights):
-	# 		rescaled_height = (height-h_min)/(h_max-h_min)
-	# 		image = self.add_oriented_stack(image, box[:,:2], label, rescaled_height)
-	# 	return (x_min, x_max, y_min, y_max), image
-
-	# OLD METHOD
-	# @staticmethod
-	# def gen_masked_stack(boxes, labels, heights):
-	# 	num_classes = len(SUNRGBD._classes)
-	# 	boxes, H, W, x_min, x_max, y_min, y_max = SUNRGBD.scale_boxes(boxes)
-	# 	image = np.zeros((2 * num_classes, H, W), dtype=np.float) # Even channels - masks
-	# 	h_min = np.min(heights)
-	# 	h_max = np.max(heights)
-	# 	for box, label, height in zip(boxes, labels, heights):
-	# 		if h_max == h_min:
-	# 			rescaled_height = 0.0
-	# 		else:	
-	# 			rescaled_height = (height-h_min)/(h_max-h_min)
-	# 		rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
-	# 		image = SUNRGBD.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
-	# 	return (x_min, x_max, y_min, y_max), image
 	
 	@staticmethod
-	def gen_masked_stack(boxes, labels, heights, extents=None):
+	def gen_masked_stack(boxes, labels, heights, tiers, extents=None):
 		if extents is None:
 			x_min, x_max, y_min, y_max = get_extents_of_boxes(boxes)
 			extents = (x_max-x_min, y_max-y_min)
 		num_classes = len(SUNRGBD._classes)
 		boxes, H, W = scale_boxes(boxes, extents)
-		image = np.zeros((2 * num_classes, H, W), dtype=np.float) # Even channels - masks
-		h_min = np.min(heights)
-		h_max = np.max(heights)
-		for box, label, height in zip(boxes, labels, heights):
-			if h_max == h_min:
-				rescaled_height = 0.0
-			else:	
-				rescaled_height = (height-h_min)/(h_max-h_min)
-			rescaled_height = rescaled_height/2.0 + 0.5 # Keep ht from [0.5 - 1]
-			image = SUNRGBD.add_masked_oriented_stack(image, box[:,:2], label, rescaled_height)
+		image = np.zeros((num_classes, H, W), dtype=np.float)	# One channel for each class
+		for box, label, tier in zip(boxes, labels, tiers):
+			image = SUNRGBD.add_masked_oriented_stack(image, box[:,:2], label, tier)
 		return image
 
 	@staticmethod
@@ -183,11 +130,10 @@ class SUNRGBD(Dataset):
 			map image
 		'''
 		C, H, W = image.shape
-		assert C == 2*len(SUNRGBD._classes), "Incorrect dims"
+		assert C == len(SUNRGBD._classes), "Incorrect dims"
 
-		masks = image[::2]
-		heights = image[1::2]
-		map_image = np.argmax(heights, axis=0) + 1
+		masks = (image > 0) * 1.0
+		map_image = np.argmax(image, axis=0) + 1
 		obj_absent_mask = np.sum(masks, axis=0) == 0
 		map_image[obj_absent_mask] = 0.0
 		cm = plt.get_cmap('jet', lut=len(SUNRGBD._classes)+1)
@@ -195,6 +141,7 @@ class SUNRGBD(Dataset):
 		coloured_map = (coloured_map[:, :, :3] * 255).astype(np.uint8)
 		return Image.fromarray(coloured_map)
 
+	# OLDMETHOD
 	def convert_masked_stack_to_height(self, image):
 		'''
 			Takes in a stack image (C, H, W) and converts it to a visual
@@ -251,10 +198,14 @@ class SUNRGBD(Dataset):
 			
 			corners_list = np.stack(corners_list)
 			label_list = np.stack(label_list)
+
+			# Create tree of objects and get tiers
 			tree = Tree(corners_list, label_list, height_list)
 			tiers = np.array([min(node.tier/2, 1.0) for node in tree])
-			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, "areas": area_list,
-											"heights": height_list, 'tiers': tiers})
+			
+			
+			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, 'areas': area_list,
+											'heights': height_list, 'tiers': tiers})
 			elgibilities, _, _ = compute_eligibility(corners_list, max_pad=5)
 			total_eligible_scenes += np.array([int(x) for x in elgibilities])
 			total_scenes += 1
@@ -262,7 +213,7 @@ class SUNRGBD(Dataset):
 		# if not os.path.exists(self.cache_dir):
 		# 	os.mkdir(self.cache_dir)
 		# # pickle.dump(self.img_corner_list, open(cache_path, "wb"))
-		print("Total :{}, Eligible: {}".format(total_scenes, total_eligible_scenes))
+		print('Total :{}, Eligible: {}'.format(total_scenes, total_eligible_scenes))
 		return
 	
 	def get_IoU(self, corners_1, corners_2):
@@ -276,16 +227,16 @@ class SUNRGBD(Dataset):
 		return len(self.img_corner_list)
 
 	def __getitem__(self, index):
-		print(self.image_path_at(index))
 		bboxes = self.img_corner_list[index]['vertices']
 		labels = self.img_corner_list[index]['labels']
 		heights = self.img_corner_list[index]['heights']
+		tiers = self.img_corner_list[index]['tiers']
 		
 		shuffled_boxes = shuffle_scene(bboxes[:,:,:2].copy())
 		extents = get_total_extents(bboxes, shuffled_boxes)
 
-		image = SUNRGBD.gen_masked_stack(bboxes, labels, heights, extents)
-		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, heights, extents)
+		image = SUNRGBD.gen_masked_stack(bboxes, labels, heights, tiers, extents)
+		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, heights, tiers, extents)
 
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
@@ -305,7 +256,8 @@ if __name__ == '__main__':
 	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
 	filtered_indices = get_filtered_indices(data)
 	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-	import pdb; pdb.set_trace()
+	train_dataset[0]
+	# import pdb; pdb.set_trace()
 	# for img_id, scene in enumerate(train_dat)
 	# import pdb; pdb.set_trace()
 	# train_dataset[0]

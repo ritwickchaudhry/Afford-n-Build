@@ -24,6 +24,7 @@ class Trainer:
         idx_train, idx_val = train_test_split(idx_trainval, test_size=0.3, random_state=1)
         train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_train], split='train')
         val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
+        
         print("Number of training instances:", len(train_dataset))
         print("Number of validation instances:", len(val_dataset))
 
@@ -33,8 +34,9 @@ class Trainer:
                                         num_workers=cfg['num_workers'])
 
         self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
-        self.model = xception(num_objects=len(cfg['CLASSES'] * 2))
+        self.model = xception(num_objects=len(cfg['CLASSES']))
         self.model.to(self.device)
+        
         self.optimizer = (optim.Adam(self.model.parameters(), lr=cfg['lr']) if cfg['optimizer'] == 'Adam'
                             else optim.SGD(self.model.parameters(), lr=cfg['lr'], momentum=cfg['momentum']))
         self.lr_scheduler = ReduceLROnPlateau(self.optimizer, factor=cfg['lr_decay'])

@@ -10,6 +10,7 @@ cfg = {
 	'H': 128,
 	'W': 128,
 	'PAD': 20,
+	'rotate_probability' : 0.5,
 	'CLASSES': ("bathtub", "bed", "bookshelf", "box", "chair", 
 				"counter", "desk", "door", "dresser", "garbage_bin", 
  				"lamp", "monitor", "night_stand", "pillow", "sink", 

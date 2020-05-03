@@ -2,10 +2,27 @@ import math
 import itertools
 import numpy as np
 
-from src.utils import get_extents
 from config.config import cfg
+from src.utils_geom import translation_mat, rotation_mat, apply_transform
 
 from shapely.geometry import Polygon, MultiPoint
+from src.utils_geom import translation_mat, rotation_mat, \
+						apply_transform
+
+def rotate_box(corners, angle):
+	assert len(corners.shape) == 2 and corners.shape[1] == 2, "Shape: {}".format(corners.shape)
+	centroid = (corners[0] + corners[2])/2
+	T1 = translation_mat(-centroid[0], -centroid[1])
+	R = rotation_mat(angle)
+	# R = np.eye(3)
+	T2 = translation_mat(centroid[0], centroid[1])
+	new_corners = apply_transform(corners, T2 @ R @ T1)
+	return new_corners
+
+def get_extents(all_corners):
+	min_x, max_x = all_corners[:,:,0].min(), all_corners[:,:,0].max()
+	min_y, max_y = all_corners[:,:,1].min(), all_corners[:,:,1].max()
+	return [float(x) for x in [min_x, max_x, min_y, max_y]]
 
 def get_extents_of_box(box):
 	# assert box.shape == (4,3)
@@ -17,6 +34,23 @@ def get_extents_of_boxes(boxes):
 	xs = boxes[:,:,0]
 	ys = boxes[:,:,1]
 	return xs.min(), xs.max(), ys.min(), ys.max()
+
+def get_dim(box):
+	H = np.linalg.norm(box[1]-box[0])
+	W = np.linalg.norm(box[2]-box[1])
+	if W > H:
+		H, W = W, H
+	return H, W
+
+def is_larger(box1, box2):
+	H1, W1 = get_dim(box1)
+	H2, W2 = get_dim(box2)
+	return (H1 >= H2 and W1 >= W2)
+
+def is_smaller(box1, box2):
+	H1, W1 = get_dim(box1)
+	H2, W2 = get_dim(box2)
+	return (H1 <= H2 and W1 <= W2)
 
 def is_contained(inner_box, outer_box):
 	outer_box = Polygon(outer_box[:,:2])
@@ -126,6 +160,47 @@ def get_teleportation_extents(all_corners, extents, dim, object_idx):
 		eligible_translation_extents = eligible_coord_dims - np.array([curr_min_dim, curr_max_dim]) # (M, 2)
 		return eligible_translation_extents
 
+def place_on_top(all_corners, small_idx, big_idx):
+	# import pdb; pdb.set_trace()
+	big_box = all_corners[big_idx]
+	small_box = all_corners[small_idx]
+	big_centroid = (big_box[0]+big_box[2])/2
+	small_centroid = (small_box[0]+small_box[2])/2
+	T1 = translation_mat(big_centroid[0]-small_centroid[0], big_centroid[1]-small_centroid[1])
+
+	small_box_translated = apply_transform(small_box, T1)
+	if not is_contained(small_box_translated, big_box):	# If small object does not fit, return original config
+		return all_corners
+
+	all_points = np.concatenate([big_box, small_box_translated], axis=0)
+	big_dy, big_dx = (big_box[1][1]-big_box[0][1]), (big_box[1][0]-big_box[0][0])
+	theta = np.arctan2(big_dy, big_dx)
+	T2 = translation_mat(-big_centroid[0], -big_centroid[1])
+	T3 = rotation_mat(-theta, units='rad')
+
+	all_points = apply_transform(all_points, T3 @ T2)
+
+	big_x_min, big_x_max, big_y_min, big_y_max = get_extents_of_box(all_points[:4])
+	small_x_min, small_x_max, small_y_min, small_y_max = get_extents_of_box(all_points[4:])
+
+	dx_min, dx_max = big_x_min - small_x_min, big_x_max - small_x_max
+	dy_min, dy_max = big_y_min - small_y_min, big_y_max - small_y_max
+
+	dx = np.random.uniform(dx_min, dx_max)
+	dy = np.random.uniform(dy_min, dy_max)
+
+	T4 = translation_mat(dx, dy)
+	small_box_translated_again = apply_transform(all_points[4:], T4)
+	all_points[4:] = small_box_translated_again
+
+	T5 = translation_mat(big_centroid[0], big_centroid[1])
+
+	all_points = apply_transform(all_points, T5 @ T3.T)
+	# all_corners[big_idx] = all_points[:4]
+	all_corners[small_idx] = all_points[4:]
+	return all_corners
+
+
 def translate(all_corners, areas, extents, dim, obj_index):
 	d_min, d_max = get_translation_extent(all_corners, areas, extents, dim, obj_index)
 	dv = np.random.uniform(d_min, d_max)
@@ -190,8 +265,14 @@ def shuffle_scene(all_corners):
 			displacements = centroids - selected_grid_points # N x 2
 			all_corners = all_corners - displacements[:,None,:]
 			break
+
+	# Rotate all boxes
+	for idx in range(all_corners.shape[0]):
+		if np.random.rand() < cfg['rotate_probability']:
+			all_corners[idx] = rotate_box(all_corners[idx], 90)
+
 	# Now translate around a bit for better packing
-	for i in range(2*pad):
+	for i in range(pad):
 		extents = get_extents(all_corners)
 		all_new_corners, new_corners = [], []
 		for idx in range(all_corners.shape[0]):

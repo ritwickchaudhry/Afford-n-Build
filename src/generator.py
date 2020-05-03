@@ -8,7 +8,7 @@ from data.transforms import RandomFlip, RandomRotation, MakeSquare
 from data.SUNRGBD import SUNRGBD
 from config.config import cfg
 import matplotlib.pyplot as plt
-from src.geom_transforms import teleport
+from src.geom_transforms import teleport, place_on_top
 
 from src.geom_transforms import translate
 
@@ -27,17 +27,29 @@ class Generator():
 		all_new_corners = []
 
 		for n in range(num_neighbours):
-			obj_index = np.random.choice(all_corners.shape[0])
 			p = np.random.random_sample()
-			if p < 0.5:
-				dim = 0
+			if p < 1.0:
+				new_corners = self.next_place_on_top(all_corners)
 			else:
-				dim = 1
-			new_corners = teleport(all_corners.copy(), extents, dim, obj_index)
-			all_new_corners.append(teleport(new_corners, extents, 1-dim, obj_index))
-
+				new_corners = self.next_teleport(all_corners, extents)
+			all_new_corners.append(new_corners)
 		return np.stack(all_new_corners, axis=0)	# 20 x num_objects x 4 x 3
 	
+	def next_place_on_top(self, all_corners):
+		idx1, idx2 = np.random.choice(all_corners.shape[0], 2, replace=False)
+		new_corners = place_on_top(all_corners.copy(), idx1, idx2)
+		return new_corners
+	
+	def next_teleport(self, all_corners, extents):
+		obj_index = np.random.choice(all_corners.shape[0])
+		p = np.random.random_sample()
+		if p < 0.5:
+			dim = 0
+		else:
+			dim = 1
+		new_corners = teleport(all_corners.copy(), extents, dim, obj_index)
+		return new_corners
+
 	@torch.no_grad()
 	def score(self, images):
 		self.model.eval()
@@ -90,4 +102,15 @@ if __name__ == '__main__':
 	# print(generator.get_teleportation_extents(all_corners2, extents2, 1, index2))
 	from src.test_hill_climbing import *
 	generator = Generator()
-	generator.hill_climbing(np.array(corners), np.array(labels), np.array(heights), np.array(extents))
+	generator.hill_climbing(np.array(corners), np.array(labels), np.array(heights), np.array(extents), num_steps=5)
+
+
+	#####
+	# from src.test import *
+	# image = SUNRGBD.gen_masked_stack(bboxes, labels, heights, extents)
+	# map_image = SUNRGBD.convert_masked_stack_to_map(image)
+	# SUNRGBD.viz_map_image(map_image)
+	# print(place_on_top(all_corners3, idx1, idx2))
+	# import pdb; pdb.set_trace()
+	# map_image = SUNRGBD.convert_masked_stack_to_map(all_corners3)
+	# SUNRGBD.viz_map_image(map_image)

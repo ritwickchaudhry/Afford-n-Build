@@ -18,6 +18,7 @@ from shapely.geometry import Polygon
 from config.config import cfg
 from src.geom_transforms import compute_eligibility, shuffle_scene, get_total_extents, scale_boxes, get_extents_of_boxes, is_contained
 from data.make_random_configurations import make_random_configuration
+from src.utils import Tree
 
 from torchvision.transforms import Compose
 from data.transforms import RandomFlip, RandomRotation, MakeSquare
@@ -153,6 +154,13 @@ class SUNRGBD(Dataset):
 	def viz_map_image(image):
 		plt.imshow(image, cmap='jet')
 		plt.show()
+	
+	@staticmethod
+	def viz_pair_map_images(image1, image2):
+		fig, ax = plt.subplots(1,2)
+		ax[0].imshow(image1, cmap='jet')
+		ax[1].imshow(image2, cmap='jet')
+		plt.show()
 
 	def gen_map(self, boxes, labels):
 		'''
@@ -200,15 +208,15 @@ class SUNRGBD(Dataset):
 		return height_image
 
 	def get_bboxdb(self):
-		# cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
-		# if os.path.exists(cache_path):
-		# 	print('Loading bboxdb from cached file')
-		# 	self.img_corner_list = pickle.load(open(cache_path, 'rb'))
-		# 	return
+		cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
+		if os.path.exists(cache_path):
+			print('Loading bboxdb from cached file')
+			self.img_corner_list = pickle.load(open(cache_path, 'rb'))
+			return
 
 		total_eligible_scenes, total_scenes = np.array([0,0,0,0,0]), 0
 		self.img_corner_list = []
-		for scene in tqdm(self.data):
+		for scene_idx,scene in enumerate(tqdm(self.data)):
 			corners_list = []
 			label_list = []
 			area_list = []
@@ -240,18 +248,20 @@ class SUNRGBD(Dataset):
 				label_list.append(self.label_to_index[obj[3][0]])
 				area_list.append(np.linalg.norm(basis[0]) * np.linalg.norm(basis[1]))
 				height_list.append(height)
-
+			
 			corners_list = np.stack(corners_list)
 			label_list = np.stack(label_list)
+			tree = Tree(corners_list, label_list, height_list)
+			tiers = np.array([min(node.tier/2, 1.0) for node in tree])
 			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, "areas": area_list,
-											"heights": height_list})
+											"heights": height_list, 'tiers': tiers})
 			elgibilities, _, _ = compute_eligibility(corners_list, max_pad=5)
 			total_eligible_scenes += np.array([int(x) for x in elgibilities])
 			total_scenes += 1
 
 		# if not os.path.exists(self.cache_dir):
 		# 	os.mkdir(self.cache_dir)
-		# pickle.dump(self.img_corner_list, open(cache_path, "wb"))
+		# # pickle.dump(self.img_corner_list, open(cache_path, "wb"))
 		print("Total :{}, Eligible: {}".format(total_scenes, total_eligible_scenes))
 		return
 	
@@ -271,14 +281,19 @@ class SUNRGBD(Dataset):
 		labels = self.img_corner_list[index]['labels']
 		heights = self.img_corner_list[index]['heights']
 		
-		shuffled_boxes = shuffle_scene(bboxes[:,:,:2])
+		shuffled_boxes = shuffle_scene(bboxes[:,:,:2].copy())
 		extents = get_total_extents(bboxes, shuffled_boxes)
 
 		image = SUNRGBD.gen_masked_stack(bboxes, labels, heights, extents)
 		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, heights, extents)
-		# random_map_image = self.convert_masked_stack_to_map(random_image)
-		# self.viz_map_image(random_map_image)
+
+		map_image = SUNRGBD.convert_masked_stack_to_map(image)
+		# SUNRGBD.viz_map_image(map_image)
 		
+		random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
+		# SUNRGBD.viz_map_image(random_map_image)
+		
+		SUNRGBD.viz_pair_map_images(map_image, random_map_image)
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
 		# -----------------------------------------------------------	
@@ -305,28 +320,34 @@ class SUNRGBD(Dataset):
 		return image, random_image
 
 if __name__ == '__main__':
-	# data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
-	# filtered_indices = get_filtered_indices(data)
-	# train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-	# train_dataset[0]
-	# val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
-	# data_obj[0]
 	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
 	filtered_indices = get_filtered_indices(data)
 	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-	stats = Counter()
-	img_stats = {}
-	for img_id, scene in enumerate(train_dataset.img_corner_list):
-		num_boxes = len(scene['vertices'])
-		boxes = scene['vertices']
-		labels = scene['labels']
-		for i, j in itertools.permutations(range(num_boxes), 2):
-			if is_contained(boxes[i], boxes[j]):
-				key = (SUNRGBD._classes[labels[i]], SUNRGBD._classes[labels[j]])
-				if key == ('desk', 'desk'):
-					train_dataset[img_id]
-				stats[key] += 1
-				img_list = img_stats.setdefault(key, [])
-				img_list.append(train_dataset.image_path_at(img_id))
-	print(stats)
 	import pdb; pdb.set_trace()
+	# for img_id, scene in enumerate(train_dat)
+	# import pdb; pdb.set_trace()
+	# train_dataset[0]
+	# val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
+	# data_obj[0]
+
+	#################################
+	# data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
+	# filtered_indices = get_filtered_indices(data)
+	# train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
+	# stats = Counter()
+	# img_stats = {}
+	# for img_id, scene in enumerate(train_dataset.img_corner_list):
+	# 	num_boxes = len(scene['vertices'])
+	# 	boxes = scene['vertices']
+	# 	labels = scene['labels']
+	# 	for i, j in itertools.permutations(range(num_boxes), 2):
+	# 		if is_contained(boxes[i], boxes[j]):
+	# 			key = (SUNRGBD._classes[labels[i]], SUNRGBD._classes[labels[j]])
+	# 			if key == ('pillow', 'bed'):
+	# 				import pdb; pdb.set_trace()
+	# 				train_dataset[img_id]
+	# 			stats[key] += 1
+	# 			img_list = img_stats.setdefault(key, [])
+	# 			img_list.append(train_dataset.image_path_at(img_id))
+	# print(stats)
+	# import pdb; pdb.set_trace()

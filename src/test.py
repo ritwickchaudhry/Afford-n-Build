@@ -22,3 +22,13 @@ all_corners2 = np.array(
 )
 index2 = 3
 extents2 = [-1,22,-1,12]
+
+all_corners3 = np.array(
+    [
+        [[1.0,5],[1,1],[10,1],[10,5]],
+        [[2,6],[2,7],[3,7],[3,6]]
+    ]
+)
+
+idx1 = 1
+idx2 = 0

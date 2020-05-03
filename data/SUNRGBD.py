@@ -233,10 +233,11 @@ class SUNRGBD(Dataset):
 		tiers = self.img_corner_list[index]['tiers']
 		
 		shuffled_boxes = shuffle_scene(bboxes[:,:,:2].copy())
+		shuffled_tiers = np.full_like(tiers, cfg['TIERS'][0])
 		extents = get_total_extents(bboxes, shuffled_boxes)
 
 		image = SUNRGBD.gen_masked_stack(bboxes, labels, tiers, extents)
-		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, tiers, extents)
+		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, shuffled_tiers, extents)
 
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------

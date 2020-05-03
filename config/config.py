@@ -15,6 +15,7 @@ cfg = {
 				"counter", "desk", "door", "dresser", "garbage_bin", 
  				"lamp", "monitor", "night_stand", "pillow", "sink", 
 				 "sofa", "table", "tv", "toilet"),
+	'TIERS': [0.5, 1.0],
 	# Trainer configs
 	'data_root': 'dataset/',
 	'cache_dir': 'cache/',

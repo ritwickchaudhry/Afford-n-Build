@@ -160,7 +160,7 @@ def get_teleportation_extents(all_corners, extents, dim, object_idx):
 		eligible_translation_extents = eligible_coord_dims - np.array([curr_min_dim, curr_max_dim]) # (M, 2)
 		return eligible_translation_extents
 
-def place_on_top(all_corners, small_idx, big_idx):
+def place_on_top(all_corners, tiers, small_idx, big_idx):
 	# import pdb; pdb.set_trace()
 	big_box = all_corners[big_idx]
 	small_box = all_corners[small_idx]
@@ -170,7 +170,7 @@ def place_on_top(all_corners, small_idx, big_idx):
 
 	small_box_translated = apply_transform(small_box, T1)
 	if not is_contained(small_box_translated, big_box):	# If small object does not fit, return original config
-		return all_corners
+		return all_corners, tiers
 
 	all_points = np.concatenate([big_box, small_box_translated], axis=0)
 	big_dy, big_dx = (big_box[1][1]-big_box[0][1]), (big_box[1][0]-big_box[0][0])
@@ -198,7 +198,8 @@ def place_on_top(all_corners, small_idx, big_idx):
 	all_points = apply_transform(all_points, T5 @ T3.T)
 	# all_corners[big_idx] = all_points[:4]
 	all_corners[small_idx] = all_points[4:]
-	return all_corners
+	tiers[small_idx] = cfg['TIERS'][1]
+	return all_corners, tiers
 
 
 def translate(all_corners, areas, extents, dim, obj_index):
@@ -207,14 +208,16 @@ def translate(all_corners, areas, extents, dim, obj_index):
 	all_corners[obj_index,:, dim] += dv
 	return all_corners
 
-def teleport(all_corners, extents, dim, obj_index):
+def teleport(all_corners, extents, tiers, dim, obj_index):
+	# TODO: Need to handle case where a (tier 1 object that has a tier 2 object on top of it) is moved
 	teleportation_extents = get_teleportation_extents(all_corners, extents, dim, obj_index)
 	if teleportation_extents.shape[0] > 0:
 		idx = np.random.choice(teleportation_extents.shape[0])
 		d_min, d_max = teleportation_extents[idx]
 		dv = np.random.uniform(d_min, d_max)
 		all_corners[obj_index,:, dim] += dv
-	return all_corners
+		tiers[obj_index] = cfg['TIERS'][0]
+	return all_corners, tiers
 
 def is_overlap(curr_min, curr_max, other_min, other_max):
 	return np.maximum(curr_min, other_min) < np.minimum(curr_max, other_max)

@@ -86,7 +86,7 @@ class SUNRGBD(Dataset):
 		return image
 	
 	@staticmethod
-	def gen_masked_stack(boxes, labels, heights, tiers, extents=None):
+	def gen_masked_stack(boxes, labels, tiers, extents=None):
 		if extents is None:
 			x_min, x_max, y_min, y_max = get_extents_of_boxes(boxes)
 			extents = (x_max-x_min, y_max-y_min)
@@ -235,8 +235,8 @@ class SUNRGBD(Dataset):
 		shuffled_boxes = shuffle_scene(bboxes[:,:,:2].copy())
 		extents = get_total_extents(bboxes, shuffled_boxes)
 
-		image = SUNRGBD.gen_masked_stack(bboxes, labels, heights, tiers, extents)
-		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, heights, tiers, extents)
+		image = SUNRGBD.gen_masked_stack(bboxes, labels, tiers, extents)
+		random_image = SUNRGBD.gen_masked_stack(shuffled_boxes, labels, tiers, extents)
 
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------

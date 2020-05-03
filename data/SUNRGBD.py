@@ -82,7 +82,7 @@ class SUNRGBD(Dataset):
 		mask = poly_path.contains_points(coords).reshape(H,W)
 		# NOTE: Can change this to incorporate multiple objects
 		# of the same class by incrementing the mask
-		image[label, mask] = tier
+		image[label, mask] = np.maximum(image[label, mask], tier)
 		return image
 	
 	@staticmethod

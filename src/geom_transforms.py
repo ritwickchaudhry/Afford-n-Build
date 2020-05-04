@@ -127,6 +127,12 @@ def get_child_indices(all_corners, object_idx):
 	children[object_idx] = False
 	return children
 
+def has_children(all_corners, object_idx):
+	parent_object = all_corners[object_idx]
+	children = np.array(list(map(lambda x : is_contained(x,parent_object), all_corners)))
+	children[object_idx] = False
+	return children.sum() > 0
+
 def get_teleportation_extents(all_corners, extents, dim, object_idx, child_indices):
 		'''
 			Invariant - Assuming the MBRs of the boxes don't overlap for the input
@@ -172,6 +178,9 @@ def get_teleportation_extents(all_corners, extents, dim, object_idx, child_indic
 		return eligible_translation_extents
 
 def place_on_top(all_corners, tiers, small_idx, big_idx):
+
+	if has_children(all_corners, small_idx):		# If the small object already has a 2nd tier object on top, return original config
+		return all_corners, tiers
 	# import pdb; pdb.set_trace()
 	big_box = all_corners[big_idx]
 	small_box = all_corners[small_idx]
@@ -220,6 +229,7 @@ def translate(all_corners, areas, extents, dim, obj_index):
 	return all_corners
 
 def teleport(all_corners, extents, tiers, dim, obj_index):
+	# TODO: Should we allow tier-2 objects to move around the tier-1 objects that they are placed on?
 	child_indices = get_child_indices(all_corners, obj_index)
 	teleportation_extents = get_teleportation_extents(all_corners, extents, dim, obj_index, child_indices)
 	if teleportation_extents.shape[0] > 0:
@@ -235,7 +245,12 @@ def is_overlap(curr_min, curr_max, other_min, other_max):
 	return np.maximum(curr_min, other_min) < np.minimum(curr_max, other_max)
 
 def rotate(all_corners, extents, obj_index, angle):
+	# TODO: We should allow rotation of tier2 objects if they will be contained within the object at the bottom
+	# TODO: We should allow rotation of tier1 objects with other objects on top. The top objects should be rotated as well
 	current_box = all_corners[obj_index] # 4 x 2
+	if has_children(all_corners, obj_index):
+		return current_box, False
+
 	rotated_box = rotate_box(current_box, angle) # 4 x 2
 	min_x, max_x, min_y, max_y = get_extents_of_box(rotated_box)
 	
@@ -290,7 +305,7 @@ def get_grids(min_dim, max_dim, dia, pad):
 	probs[K:] = probs[K:] * 0.01
 	return grids, probs
 
-def shuffle_scene(all_corners):
+def shuffle_scene(all_corners, areas):
 	assert len(all_corners.shape) == 3
 	assert all_corners.shape[1] == 4 and all_corners.shape[2] == 2
 	grid_it = lambda x,y : np.array(list(itertools.product(x,y)))
@@ -329,7 +344,34 @@ def shuffle_scene(all_corners):
 		for idx in range(all_corners.shape[0]):
 			new_corners = translate(all_corners.copy(), None, extents, 0, idx)
 			all_corners = translate(new_corners, None, extents, 1, idx)
-	return np.array(all_corners)
+	
+	all_tiers = np.full(all_corners.shape[0], cfg['TIERS'][0])
+	if all_corners.shape[0] == 1:
+		return all_corners, all_tiers
+
+	# TODO: Call place-on-top here
+	sorted_indices = np.argsort(areas)
+	all_sorted_corners, sorted_inv_areas = all_corners[sorted_indices].copy(), 1.0/areas[sorted_indices]
+	place_on_top_probs = sorted_inv_areas[:-1] / np.sum(sorted_inv_areas[:-1])
+	num_objects_to_place = np.random.choice(cfg['max_num_place_on_top']+1)
+	all_sorted_tiers = all_tiers.copy()
+
+	# print('Number of objects to place: ', num_objects_to_place)
+
+	if num_objects_to_place == 0:
+		return all_corners, all_tiers
+	
+	num_objects_to_place = min(num_objects_to_place, all_corners.shape[0]-1) # At least one object as to be tier 1
+	small_box_indices = np.random.choice(all_sorted_corners.shape[0]-1, num_objects_to_place, 
+										replace=False,	p=place_on_top_probs)
+	for small_box_idx in small_box_indices:
+		# import pdb; pdb.set_trace()
+		objects_on_top = np.setdiff1d(np.arange(small_box_idx + 1, all_corners.shape[0]), small_box_indices)
+		big_box_idx = np.random.choice(objects_on_top)
+		all_sorted_corners, all_sorted_tiers = place_on_top(all_sorted_corners, all_sorted_tiers, small_box_idx, big_box_idx)
+	
+	all_corners[sorted_indices], all_tiers[sorted_indices] = all_sorted_corners, all_sorted_tiers
+	return all_corners, all_tiers
 
 if __name__ == '__main__':
 	from src.test import *

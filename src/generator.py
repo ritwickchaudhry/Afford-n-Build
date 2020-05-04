@@ -9,7 +9,7 @@ from data.SUNRGBD import SUNRGBD
 from config.config import cfg
 import matplotlib.pyplot as plt
 import math
-from src.geom_transforms import teleport, place_on_top
+from src.geom_transforms import teleport, place_on_top, rotate
 
 from src.geom_transforms import translate
 
@@ -28,17 +28,16 @@ class Generator():
 		all_new_corners = []
 		all_new_tiers = []
 
+		next_fns = [self.next_place_on_top, self.next_teleport, self.next_rotate]
+
 		for n in range(num_neighbours):
-			p = np.random.random_sample()
-			if p < cfg['place_on_top_prob']:
-				new_corners, new_tiers = self.next_place_on_top(all_corners, tiers)
-			else:
-				new_corners, new_tiers = self.next_teleport(all_corners, tiers, extents)
+			next_idx = np.random.choice(len(transforms), p=cfg['next_probs'])
+			new_corners, new_tiers = next_fns[next_idx](all_corners, tiers, extents)
 			all_new_corners.append(new_corners)
 			all_new_tiers.append(new_tiers)
 		return np.stack(all_new_corners, axis=0), np.stack(all_new_tiers, axis=0)	# 20 x num_objects x 4 x 3
 	
-	def next_place_on_top(self, all_corners, tiers):
+	def next_place_on_top(self, all_corners, tiers, extents):
 		# import pdb; pdb.set_trace()
 		tier_one_objects = np.where(np.isclose(tiers, cfg['TIERS'][0]))[0]
 	
@@ -58,6 +57,17 @@ class Generator():
 			dim = 1
 		new_corners, new_tiers = teleport(all_corners.copy(), extents, tiers.copy(), dim, obj_index)
 		return new_corners, new_tiers
+
+	def next_rotate(self, all_corners, tiers, extents):
+		tier_one_objects = np.where(np.isclose(tiers, cfg['TIERS'][0]))[0]
+		if tier_one_objects.shape[0] > 0:
+			obj_index = np.random.choice(tier_one_objects, 1)
+			new_obj_corners, was_successful = rotate(all_corners, extents, obj_index, 90)
+			if was_successful:
+				all_corners[obj_index] = new_obj_corners
+		return all_corners, tiers
+		
+
 
 	@torch.no_grad()
 	def score(self, images):

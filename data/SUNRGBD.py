@@ -204,7 +204,7 @@ class SUNRGBD(Dataset):
 			tiers = np.array([min(node.tier/2, 1.0) for node in tree])
 			
 			
-			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, 'areas': area_list,
+			self.img_corner_list.append({'vertices': corners_list, 'labels': label_list, 'areas': np.array(area_list),
 											'heights': height_list, 'tiers': tiers})
 			elgibilities, _, _ = compute_eligibility(corners_list, max_pad=5)
 			total_eligible_scenes += np.array([int(x) for x in elgibilities])
@@ -231,9 +231,9 @@ class SUNRGBD(Dataset):
 		labels = self.img_corner_list[index]['labels']
 		heights = self.img_corner_list[index]['heights']
 		tiers = self.img_corner_list[index]['tiers']
+		areas = self.img_corner_list[index]['areas']
 		
-		shuffled_boxes = shuffle_scene(bboxes[:,:,:2].copy())
-		shuffled_tiers = np.full_like(tiers, cfg['TIERS'][0])
+		shuffled_boxes, shuffled_tiers = shuffle_scene(bboxes[:,:,:2].copy(), areas.copy())
 		extents = get_total_extents(bboxes, shuffled_boxes)
 
 		image = SUNRGBD.gen_masked_stack(bboxes, labels, tiers, extents)
@@ -242,9 +242,9 @@ class SUNRGBD(Dataset):
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
 		# -----------------------------------------------------------	
-		# map_image = SUNRGBD.convert_masked_stack_to_map(image)
-		# random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
-		# SUNRGBD.viz_pair_map_images(map_image, random_map_image)
+		map_image = SUNRGBD.convert_masked_stack_to_map(image)
+		random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
+		SUNRGBD.viz_pair_map_images(map_image, random_map_image)
 		# -----------------------------------------------------------
 
 		# image - num_classes x H x W
@@ -257,7 +257,8 @@ if __name__ == '__main__':
 	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
 	filtered_indices = get_filtered_indices(data)
 	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-	train_dataset[0]
+	for i in range(4):
+		train_dataset[i]
 	# import pdb; pdb.set_trace()
 	# for img_id, scene in enumerate(train_dat)
 	# import pdb; pdb.set_trace()

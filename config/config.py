@@ -16,8 +16,10 @@ cfg = {
  				"lamp", "monitor", "night_stand", "pillow", "sink", 
 				 "sofa", "table", "tv", "toilet"),
 	'TIERS': [0.5, 1.0],
+	# Shuffle scenes
+	'max_num_place_on_top': 2,
 	# Hill Climbing
-	'place_on_top_prob': 0.5,
+	'next_probs' : [1.0/3, 1.0/3, 1.0/3],	# [place_on_top, teleport, rotate]
 	# Trainer configs
 	'data_root': 'dataset/',
 	'cache_dir': 'cache/',

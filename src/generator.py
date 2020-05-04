@@ -8,10 +8,15 @@ from data.transforms import RandomFlip, RandomRotation, MakeSquare
 from data.SUNRGBD import SUNRGBD
 from config.config import cfg
 import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from data.filter import get_filtered_indices
+from src.utils import Tree
+from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 import math
-from src.geom_transforms import teleport, place_on_top, rotate
+from src.geom_transforms import teleport, place_on_top, rotate, get_extents
 
-from src.geom_transforms import translate
+from src.geom_transforms import translate, shuffle_scene
 
 class Generator():
 	def __init__(self):
@@ -22,7 +27,9 @@ class Generator():
 
 		self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
 		self.model = xception(num_objects=len(cfg['CLASSES']))
+		self.model.load_state_dict(torch.load(cfg["best_model_path"])["params"])
 		self.model.to(self.device)
+		self.logger = SummaryWriter()
 		
 	def next(self, all_corners, tiers, extents, num_neighbours=1):
 		all_new_corners = []
@@ -31,8 +38,11 @@ class Generator():
 		next_fns = [self.next_place_on_top, self.next_teleport, self.next_rotate]
 
 		for n in range(num_neighbours):
-			next_idx = np.random.choice(len(transforms), p=cfg['next_probs'])
+			next_idx = np.random.choice(len(next_fns), p=cfg['next_probs'])
 			new_corners, new_tiers = next_fns[next_idx](all_corners, tiers, extents)
+			new_extents = get_extents(new_corners)
+			if new_extents[0] < extents[0] or new_extents[2] < extents[2] or new_extents[1] > extents[1] or new_extents[3] > extents[3]:
+				import pdb; pdb.set_trace()
 			all_new_corners.append(new_corners)
 			all_new_tiers.append(new_tiers)
 		return np.stack(all_new_corners, axis=0), np.stack(all_new_tiers, axis=0)	# 20 x num_objects x 4 x 3
@@ -61,7 +71,7 @@ class Generator():
 	def next_rotate(self, all_corners, tiers, extents):
 		tier_one_objects = np.where(np.isclose(tiers, cfg['TIERS'][0]))[0]
 		if tier_one_objects.shape[0] > 0:
-			obj_index = np.random.choice(tier_one_objects, 1)
+			obj_index = np.random.choice(tier_one_objects)
 			new_obj_corners, was_successful = rotate(all_corners, extents, obj_index, 90)
 			if was_successful:
 				all_corners[obj_index] = new_obj_corners
@@ -75,20 +85,24 @@ class Generator():
 		scores = F.softmax(self.model(images).view(-1), dim=-1)
 		return scores.cpu().numpy()
 	
-	def hill_climbing(self, all_corners, labels, tiers, extents, num_neighbours=20, beam_width=5, num_steps=2):
+	def hill_climbing(self, all_corners, labels, tiers, extents, num_neighbours=5, beam_width=5, num_steps=2):
 		# TODO: Handle the new tiers that are returned by self.next(...)
-		all_corners_list = all_corners[None,...]	# 1 x num_objs x 4 x 3
-		all_tiers_list = tiers[None,...]			# 1 x num_objects
+		all_corners_list = all_corners[None,...].copy()	# 1 x num_objs x 4 x 3
+		all_tiers_list = tiers[None,...].copy()			# 1 x num_objects
 		top_images = []
-		for step in range(num_steps):
+
+		for step in tqdm(range(num_steps)):
 			all_new_corners_list = []
 			all_new_tiers_list = []
-			for all_corners in all_corners_list:
-				all_new_corners, all_new_tiers = self.next(all_corners, tiers, extents, num_neighbours)
+			copy_list = all_corners_list.copy()
+			# print("CORNERS1" , all_corners_list)
+			for all_corners, all_tiers in zip(all_corners_list, all_tiers_list):
+				all_new_corners, all_new_tiers = self.next(all_corners.copy(), all_tiers.copy(), extents, num_neighbours)
 				all_new_corners_list.append(all_new_corners)
 				all_new_tiers_list.append(all_new_tiers)
+			print(np.allclose(copy_list, all_corners_list))
 
-			# Concatenate new and old corners and pass through model to get scores
+
 			all_new_corners_list.append(all_corners_list)
 			all_new_tiers_list.append(all_tiers_list)
 			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21/105 x num_objects x 4 x 3
@@ -101,33 +115,60 @@ class Generator():
 			
 
 			if step == 0:
-				SUNRGBD.viz_pair_map_images(SUNRGBD.convert_masked_stack_to_map(images[-1]),
-											SUNRGBD.convert_masked_stack_to_map(images[0]))
-				SUNRGBD.viz_pair_map_images(SUNRGBD.convert_masked_stack_to_map(images[-1]),
-											SUNRGBD.convert_masked_stack_to_map(images[0]))
 				top_images.append(SUNRGBD.convert_masked_stack_to_map(images[-1]))
+
 
 			images = torch.Tensor(np.stack(images, axis=0)).to(self.device)
 			scores = self.score(images)
 			
 			# Pick top beam-width number of configurations w/o replacement
-			top_indices = np.random.choice(images.shape[0], beam_width, replace=False, p=scores)
+			
+			# top_indices = np.random.choice(images.shape[0], beam_width, replace=False, p=scores)
+			#Hard selection
+			top_indices = np.flip(np.argsort(scores))[:5]
+			print("SCORES:", scores)
+			print(len(scores), scores[np.flip(np.argsort(scores))], scores[top_indices])
+
+			self.logger.add_scalars("score", {str(idx): float(s) for idx,s in enumerate(scores[top_indices])}, global_step=step)
+			
+			if step == 0 or step == num_steps - 1:
+				print({str(idx): s for idx,s in enumerate(scores[top_indices])})
+			# print({str(idx): s for idx,s in enumerate(scores[top_indices])})
+
 			all_corners_list = all_new_corners_list[top_indices]
 			all_tiers_list = all_new_tiers_list[top_indices]
 
 			# Save top image in gif
 			top_image = images[top_indices[np.argmax(scores[top_indices])]].cpu().numpy()
 			top_image = SUNRGBD.convert_masked_stack_to_map(top_image)	# 128 x 128
+			# top_image.save("imgs/{}.png".format(step))
 			top_images.append(top_image)
+
 		
 		print(top_images)
 		print("===================")
-		top_images[0].save("0.png")
-		top_images[0].save('out.gif', save_all=True, append_images=top_images[1:], fps=0.1, loop=0, optimize=False)
+		top_images[0].save('out.gif', save_all=True, append_images=top_images[1:], fps=0.05, loop=0, optimize=False)
 		
 		return all_corners_list
 
+	def initialize(self, index):
+		data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
+		filtered_indices = get_filtered_indices(data)
+		train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
+		bboxes = train_dataset.img_corner_list[index]['vertices']
+		areas = train_dataset.img_corner_list[index]['areas']
+		heights = train_dataset.img_corner_list[index]['heights']
+		labels = train_dataset.img_corner_list[index]['labels']
+		shuffled_boxes, shuffled_tiers = shuffle_scene(bboxes[:,:,:2].copy(), areas.copy())
+		extents = get_extents(shuffled_boxes)
+		return shuffled_boxes, labels, shuffled_tiers, extents
+			
+
 if __name__ == '__main__':
+	generator = Generator()
+	corners, labels, tiers, extents = generator.initialize(0)
+	generator.hill_climbing(corners[...,:2], labels, tiers, extents)
+
 	# from src.test import *
 	# generator = Generator()
 	# print(generator.get_teleportation_extents(all_corners2, extents2, 1, index2))

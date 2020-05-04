@@ -19,7 +19,7 @@ cfg = {
 	# Shuffle scenes
 	'max_num_place_on_top': 2,
 	# Hill Climbing
-	'next_probs' : [1.0/3, 1.0/3, 1.0/3],	# [place_on_top, teleport, rotate]
+	'next_probs' : [0.2, 0.4, 0.4],	# [place_on_top, teleport, rotate]
 	# Trainer configs
 	'data_root': 'dataset/',
 	'cache_dir': 'cache/',

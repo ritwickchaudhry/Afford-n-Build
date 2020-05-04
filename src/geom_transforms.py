@@ -54,8 +54,11 @@ def is_smaller(box1, box2):
 
 def is_contained(inner_box, outer_box):
 	# import pdb; pdb.set_trace()
-	outer_box = Polygon(outer_box[:,:2])
-	inner_points = MultiPoint(inner_box[:,:2])
+	try:
+		outer_box = Polygon(outer_box[:,:2])
+		inner_points = MultiPoint(inner_box[:,:2])
+	except:
+		import pdb; pdb.set_trace()
 	return outer_box.contains(inner_points)
 
 def get_total_extents(boxes, random_boxes):
@@ -66,6 +69,7 @@ def get_total_extents(boxes, random_boxes):
 	return max(x_diff, x_diff_r), max(y_diff, y_diff_r)
 
 def scale_boxes(boxes, extents):
+	boxes = boxes.copy()
 	x_min, y_min = boxes[:,:,0].min(), boxes[:,:,1].min()
 	x_diff, y_diff = extents
 	scale = cfg['H']/max(x_diff, y_diff)
@@ -248,6 +252,7 @@ def rotate(all_corners, extents, obj_index, angle):
 	# TODO: We should allow rotation of tier2 objects if they will be contained within the object at the bottom
 	# TODO: We should allow rotation of tier1 objects with other objects on top. The top objects should be rotated as well
 	current_box = all_corners[obj_index] # 4 x 2
+
 	if has_children(all_corners, obj_index):
 		return current_box, False
 

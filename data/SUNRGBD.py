@@ -210,9 +210,9 @@ class SUNRGBD(Dataset):
 			total_eligible_scenes += np.array([int(x) for x in elgibilities])
 			total_scenes += 1
 
-		# if not os.path.exists(self.cache_dir):
-		# 	os.mkdir(self.cache_dir)
-		# # pickle.dump(self.img_corner_list, open(cache_path, "wb"))
+		if not os.path.exists(self.cache_dir):
+			os.mkdir(self.cache_dir)
+		pickle.dump(self.img_corner_list, open(cache_path, "wb"))
 		print('Total :{}, Eligible: {}'.format(total_scenes, total_eligible_scenes))
 		return
 	
@@ -257,8 +257,9 @@ if __name__ == '__main__':
 	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
 	filtered_indices = get_filtered_indices(data)
 	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-	for i in range(4):
-		train_dataset[i]
+	import pdb; pdb.set_trace()
+	# for i in range(4):
+		# train_dataset[i]
 	# import pdb; pdb.set_trace()
 	# for img_id, scene in enumerate(train_dat)
 	# import pdb; pdb.set_trace()

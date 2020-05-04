@@ -24,7 +24,7 @@ cfg = {
 	'data_root': 'dataset/',
 	'cache_dir': 'cache/',
 	'data_path': 'dataset/SUNRGBDMeta3DBB_v2.mat',
-	'epochs': 20,
+	'epochs': 50,
 	'lr': 0.001,
 	'momentum': 0.9,
 	'lr_decay': 0.1,
@@ -32,7 +32,9 @@ cfg = {
 	'num_workers': 4,
 	'optimizer': 'Adam', # 'Adam' or 'SGD'
 	'use_cuda': True,
-	'hinge_loss_margin': 1,
+	'hinge_loss_margin': 1.5,
 	'log_every': 10,
-	'val_every': 50
+	'val_every': 50,
+	'best_model_path': 'models/best.pth',
+	'latest_model_path': 'models/ckpt.pth'
 }

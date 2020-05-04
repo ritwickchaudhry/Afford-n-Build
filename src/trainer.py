@@ -43,14 +43,21 @@ class Trainer:
 
         self.logger = SummaryWriter()
 
-    def save(self, batch_index, val_loss):
+        self.best_save_path = cfg['best_model_path']
+        self.latest_save_path = cfg['latest_model_path']
+
+    def save(self, epoch, batch_index, val_loss):
         ckpt = {
             'params': self.model.state_dict(),
             'optim' : self.optimizer.state_dict(),
+            'epoch' : epoch,
             'batch' : batch_index,
             'val_loss': val_loss
         }
-        torch.save(ckpt, 'ckpt.pth')
+        torch.save(ckpt, self.latest_save_path)
+        if val_loss < self.best_val_loss:
+            self.best_val_loss = val_loss
+            torch.save(ckpt, self.best_save_path)
 
     def criterion(self, pos_scores, neg_scores):
         return F.relu(neg_scores - pos_scores + cfg['hinge_loss_margin']).mean(dim=0)
@@ -75,6 +82,7 @@ class Trainer:
 
             iteration = epoch * len(self.train_loader) + batch_idx
             self.logger.add_scalars('Loss', {'train':loss.item()}, iteration)
+
             if iteration % cfg['log_every'] == 0:
                 print("Epoch {}, Batch {}, Iteration {}: Traning loss = {}".format(epoch, batch_idx,
                         iteration, loss.item()))
@@ -85,7 +93,7 @@ class Trainer:
                         iteration, val_loss))
                 self.logger.add_scalars('Loss', {'val':val_loss}, iteration)
                 self.lr_scheduler.step(val_loss)
-                self.save(batch_idx, val_loss)
+                self.save(epoch, batch_idx, val_loss)
 
             loss.backward()
             self.optimizer.step()
@@ -116,6 +124,7 @@ class Trainer:
         return running_loss.get_avg()
     
     def train(self):
+        self.best_val_loss = np.inf
         for epoch in range(cfg['epochs']):
             train_loss = self.train_epoch(epoch)
 

@@ -242,9 +242,9 @@ class SUNRGBD(Dataset):
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
 		# -----------------------------------------------------------	
-		map_image = SUNRGBD.convert_masked_stack_to_map(image)
-		random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
-		SUNRGBD.viz_pair_map_images(map_image, random_map_image)
+		# map_image = SUNRGBD.convert_masked_stack_to_map(image)
+		# random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
+		# SUNRGBD.viz_pair_map_images(map_image, random_map_image)
 		# -----------------------------------------------------------
 
 		# image - num_classes x H x W

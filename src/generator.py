@@ -15,6 +15,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import math
 from src.geom_transforms import teleport, place_on_top, rotate, get_extents
+from copy import deepcopy
 
 from src.geom_transforms import translate, shuffle_scene
 
@@ -76,67 +77,66 @@ class Generator():
 			if was_successful:
 				all_corners[obj_index] = new_obj_corners
 		return all_corners, tiers
-		
-
 
 	@torch.no_grad()
 	def score(self, images):
 		self.model.eval()
-		scores = F.softmax(self.model(images).view(-1), dim=-1)
+		scores = self.model(images).view(-1)
 		return scores.cpu().numpy()
 	
-	def hill_climbing(self, all_corners, labels, tiers, extents, num_neighbours=5, beam_width=5, num_steps=2):
+	def hill_climbing(self, init_corners, labels, init_tiers, extents, num_neighbours=20, beam_width=5, num_steps=10):
+		print(labels)
 		# TODO: Handle the new tiers that are returned by self.next(...)
-		all_corners_list = all_corners[None,...].copy()	# 1 x num_objs x 4 x 3
-		all_tiers_list = tiers[None,...].copy()			# 1 x num_objects
+		corners_list_beam = deepcopy(init_corners[None,...])	# 1 x num_objs x 4 x 3
+		tiers_list_beam = deepcopy(init_tiers[None,...])			# 1 x num_objects
 		top_images = []
+		# import pdb; pdb.set_trace()
 
 		for step in tqdm(range(num_steps)):
+			# print("============================================================")
 			all_new_corners_list = []
 			all_new_tiers_list = []
-			copy_list = all_corners_list.copy()
-			# print("CORNERS1" , all_corners_list)
-			for all_corners, all_tiers in zip(all_corners_list, all_tiers_list):
-				all_new_corners, all_new_tiers = self.next(all_corners.copy(), all_tiers.copy(), extents, num_neighbours)
+			# For each scene in the beam, get the specified number of neighbours and their respective tiers
+			for all_corners, all_tiers in zip(corners_list_beam, tiers_list_beam):
+				all_new_corners, all_new_tiers = self.next(deepcopy(all_corners), deepcopy(all_tiers), extents, num_neighbours)
 				all_new_corners_list.append(all_new_corners)
 				all_new_tiers_list.append(all_new_tiers)
-			print(np.allclose(copy_list, all_corners_list))
 
-
-			all_new_corners_list.append(all_corners_list)
-			all_new_tiers_list.append(all_tiers_list)
+			# Append existing beam to new scenes and new tiers and concatenate the numpy arrays
+			all_new_corners_list.append(deepcopy(corners_list_beam))
+			all_new_tiers_list.append(deepcopy(tiers_list_beam))
 			all_new_corners_list = np.concatenate(all_new_corners_list, axis=0)	# 21/105 x num_objects x 4 x 3
 			all_new_tiers_list = np.concatenate(all_new_tiers_list, axis=0)		# 21/105 x num_objects
 
-			
+			# Get the images for all the scenes
 			image_extents = (extents[1]-extents[0], extents[3]-extents[2])
 			images = [self.transform(SUNRGBD.gen_masked_stack(all_corners, labels, tiers, image_extents))
 						for all_corners, tiers in zip(all_new_corners_list, all_new_tiers_list)]
 			
-
+			# Append initial scene to top_images to show progress
 			if step == 0:
 				top_images.append(SUNRGBD.convert_masked_stack_to_map(images[-1]))
 
 
+			# Pass images through the model and get scores
 			images = torch.Tensor(np.stack(images, axis=0)).to(self.device)
 			scores = self.score(images)
 			
-			# Pick top beam-width number of configurations w/o replacement
-			
+			# Pick top beam-width number of configurations w/o replacement - stochastic selection
 			# top_indices = np.random.choice(images.shape[0], beam_width, replace=False, p=scores)
-			#Hard selection
-			top_indices = np.flip(np.argsort(scores))[:5]
-			print("SCORES:", scores)
-			print(len(scores), scores[np.flip(np.argsort(scores))], scores[top_indices])
+			# Hard selection
+			top_indices = np.flip(np.argsort(scores))[:beam_width]
+			# print("SCORES:", scores, len(scores), scores[top_indices])
 
-			self.logger.add_scalars("score", {str(idx): float(s) for idx,s in enumerate(scores[top_indices])}, global_step=step)
+			# self.logger.add_scalars("score", {str(idx): float(s) for idx,s in enumerate(scores[top_indices])}, global_step=step)
 			
-			if step == 0 or step == num_steps - 1:
-				print({str(idx): s for idx,s in enumerate(scores[top_indices])})
+			# if step == 0 or step == num_steps - 1:
+			# 	print({str(idx): s for idx,s in enumerate(scores[top_indices])})
 			# print({str(idx): s for idx,s in enumerate(scores[top_indices])})
 
-			all_corners_list = all_new_corners_list[top_indices]
-			all_tiers_list = all_new_tiers_list[top_indices]
+			# Update beam
+			corners_list_beam = all_new_corners_list[top_indices]
+			tiers_list_beam = all_new_tiers_list[top_indices]
 
 			# Save top image in gif
 			top_image = images[top_indices[np.argmax(scores[top_indices])]].cpu().numpy()
@@ -145,11 +145,9 @@ class Generator():
 			top_images.append(top_image)
 
 		
-		print(top_images)
-		print("===================")
 		top_images[0].save('out.gif', save_all=True, append_images=top_images[1:], fps=0.05, loop=0, optimize=False)
 		
-		return all_corners_list
+		return corners_list_beam, tiers_list_beam
 
 	def initialize(self, index):
 		data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
@@ -166,7 +164,7 @@ class Generator():
 
 if __name__ == '__main__':
 	generator = Generator()
-	corners, labels, tiers, extents = generator.initialize(0)
+	corners, labels, tiers, extents = generator.initialize(42)
 	generator.hill_climbing(corners[...,:2], labels, tiers, extents)
 
 	# from src.test import *

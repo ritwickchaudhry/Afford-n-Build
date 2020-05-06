@@ -25,6 +25,10 @@ class Trainer:
         idx_train, idx_val = train_test_split(idx_trainval, test_size=0.3, random_state=1)
         train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_train], split='train')
         val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
+        # import pdb; pdb.set_trace()
+        self.idx_train = idx_train
+        self.idx_test = idx_test
+        self.idx_val = idx_val
         
         print("Number of training instances:", len(train_dataset))
         print("Number of validation instances:", len(val_dataset))
@@ -102,6 +106,12 @@ class Trainer:
 
             loss.backward()
             self.optimizer.step()
+        
+        # val_loss = self.validate()
+        # print("Epoch {}, Batch {}, Iteration {}: Validation loss = {}".format(epoch, batch_idx,
+        #         iteration, val_loss))
+        # self.logger.add_scalars('Loss', {'val':val_loss}, iteration)
+        # self.save(epoch, batch_idx, val_loss)
         
         return running_loss.get_avg()
     

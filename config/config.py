@@ -36,6 +36,6 @@ cfg = {
 	'hinge_loss_margin': 1.5,
 	'log_every': 10,
 	'val_every': 50,
-	'best_model_path': 'models/simple_cnn_best.pth',
-	'latest_model_path': 'models/simple_cnn_ckpt.pth'
+	'best_model_path': 'models/simple_cnn_best_1.pth',
+	'latest_model_path': 'models/simple_cnn_ckpt_1.pth'
 }

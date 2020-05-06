@@ -19,8 +19,8 @@ class SimpleCNN(nn.Module):
 		self.bn2 = nn.BatchNorm2d(64)
 
 		self.block1=Block(64,128,2,2,start_with_relu=False,grow_first=True)
-		self.block2=Block(128,256,2,2,start_with_relu=True,grow_first=True)
-		self.block3=Block(256,512,2,2,start_with_relu=True,grow_first=True)
+		self.block2=Block(128,512,2,2,start_with_relu=True,grow_first=True)
+		# self.block3=Block(256,512,2,2,start_with_relu=True,grow_first=True)
 
 		self.fc1 = nn.Sequential(
 			nn.Linear(512, 128),
@@ -56,7 +56,7 @@ class SimpleCNN(nn.Module):
 		
 		x = self.block1(x) # 128 x 55 x 55
 		x = self.block2(x) # 256 x 28 x 28
-		x = self.block3(x) # 512 x 14 x 14
+		# x = self.block3(x) # 512 x 14 x 14
 
 		x = F.adaptive_avg_pool2d(x, (1,1)) # 512 x 1 x 1 - Can downsize more I think, but let's try this
 		x = torch.flatten(x, start_dim=1) # 512

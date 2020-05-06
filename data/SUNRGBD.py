@@ -155,11 +155,11 @@ class SUNRGBD(Dataset):
 		return height_image
 
 	def get_bboxdb(self):
-		cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
-		if os.path.exists(cache_path):
-			print('Loading bboxdb from cached file')
-			self.img_corner_list = pickle.load(open(cache_path, 'rb'))
-			return
+		# cache_path = os.path.join(self.cache_dir, 'bboxdb_{}.pkl'.format(self.split))
+		# if os.path.exists(cache_path):
+		# 	print('Loading bboxdb from cached file')
+		# 	self.img_corner_list = pickle.load(open(cache_path, 'rb'))
+		# 	return
 
 		total_eligible_scenes, total_scenes = np.array([0,0,0,0,0]), 0
 		self.img_corner_list = []
@@ -210,9 +210,9 @@ class SUNRGBD(Dataset):
 			total_eligible_scenes += np.array([int(x) for x in elgibilities])
 			total_scenes += 1
 
-		if not os.path.exists(self.cache_dir):
-			os.mkdir(self.cache_dir)
-		pickle.dump(self.img_corner_list, open(cache_path, "wb"))
+		# if not os.path.exists(self.cache_dir):
+		# 	os.mkdir(self.cache_dir)
+		# pickle.dump(self.img_corner_list, open(cache_path, "wb"))
 		print('Total :{}, Eligible: {}'.format(total_scenes, total_eligible_scenes))
 		return
 	
@@ -255,9 +255,9 @@ class SUNRGBD(Dataset):
 
 if __name__ == '__main__':
 	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
+	import pdb; pdb.set_trace()
 	filtered_indices = get_filtered_indices(data)
 	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-	import pdb; pdb.set_trace()
 	# for i in range(4):
 		# train_dataset[i]
 	# import pdb; pdb.set_trace()

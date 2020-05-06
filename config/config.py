@@ -21,6 +21,7 @@ cfg = {
 	# Hill Climbing
 	'next_probs' : [0.2, 0.4, 0.4],	# [place_on_top, teleport, rotate]
 	# Trainer configs
+	'model_type': 'simple_cnn',
 	'data_root': 'dataset/',
 	'cache_dir': 'cache/',
 	'data_path': 'dataset/SUNRGBDMeta3DBB_v2.mat',
@@ -35,6 +36,6 @@ cfg = {
 	'hinge_loss_margin': 1.5,
 	'log_every': 10,
 	'val_every': 50,
-	'best_model_path': 'models/best.pth',
-	'latest_model_path': 'models/ckpt.pth'
+	'best_model_path': 'models/simple_cnn_best.pth',
+	'latest_model_path': 'models/simple_cnn_ckpt.pth'
 }

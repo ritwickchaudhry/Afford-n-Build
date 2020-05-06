@@ -8,6 +8,7 @@ from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 
 from archs.xception import xception
+from archs.simple_cnn import simple_cnn
 from data.filter import get_filtered_indices
 from data.SUNRGBD import SUNRGBD
 from config.config import cfg
@@ -20,7 +21,7 @@ class Trainer:
     def __init__(self):
         data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
         filtered_indices = get_filtered_indices(data)
-        idx_trainval, _ = train_test_split(filtered_indices, test_size=0.1, random_state=1)
+        idx_trainval, idx_test = train_test_split(filtered_indices, test_size=0.1, random_state=1)
         idx_train, idx_val = train_test_split(idx_trainval, test_size=0.3, random_state=1)
         train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_train], split='train')
         val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
@@ -34,7 +35,11 @@ class Trainer:
                                         num_workers=cfg['num_workers'])
 
         self.device = torch.device('cuda' if cfg['use_cuda'] and torch.cuda.is_available() else 'cpu')
-        self.model = xception(num_objects=len(cfg['CLASSES']))
+
+        if cfg['model_type'] == 'xception':
+            self.model = xception(num_objects=len(cfg['CLASSES']))
+        else:
+            self.model = simple_cnn(num_objects=len(cfg['CLASSES']))
         self.model.to(self.device)
         
         self.optimizer = (optim.Adam(self.model.parameters(), lr=cfg['lr']) if cfg['optimizer'] == 'Adam'
@@ -132,3 +137,4 @@ class Trainer:
 if __name__ == '__main__':
     trainer = Trainer()
     trainer.train()
+    # import pdb; pdb.set_trace()

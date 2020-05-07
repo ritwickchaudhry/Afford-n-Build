@@ -68,11 +68,14 @@ def get_total_extents(boxes, random_boxes):
 	y_diff, y_diff_r = y_max - y_min, y_max_r - y_min_r
 	return max(x_diff, x_diff_r), max(y_diff, y_diff_r)
 
-def scale_boxes(boxes, extents):
+def scale_boxes(boxes, extents, sz=None):
 	boxes = boxes.copy()
 	x_min, y_min = boxes[:,:,0].min(), boxes[:,:,1].min()
 	x_diff, y_diff = extents
-	scale = cfg['H']/max(x_diff, y_diff)
+	if sz is None:
+		scale = cfg['H']/max(x_diff, y_diff)
+	else:
+		scale = sz/max(x_diff, y_diff)
 	boxes[:,:,0] = boxes[:,:,0] - x_min
 	boxes[:,:,1] = boxes[:,:,1] - y_min
 	boxes = boxes * scale

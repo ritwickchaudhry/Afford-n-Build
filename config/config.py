@@ -20,8 +20,9 @@ cfg = {
 	'max_num_place_on_top': 2,
 	# Hill Climbing
 	'next_probs' : [0.2, 0.4, 0.4],	# [place_on_top, teleport, rotate]
+	'temperature': 0.25,
 	# Trainer configs
-	'model_type': 'simple_cnn',
+	'model_type': 'xception',
 	'data_root': 'dataset/',
 	'cache_dir': 'cache/',
 	'data_path': 'dataset/SUNRGBDMeta3DBB_v2.mat',
@@ -36,6 +37,6 @@ cfg = {
 	'hinge_loss_margin': 1.5,
 	'log_every': 10,
 	'val_every': 50,
-	'best_model_path': 'models/simple_cnn_best_1.pth',
-	'latest_model_path': 'models/simple_cnn_ckpt_1.pth'
+	'best_model_path': 'models/xception_best.pth',
+	'latest_model_path': 'models/xception_ckpt.pth'
 }

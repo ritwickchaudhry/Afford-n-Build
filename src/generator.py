@@ -1,25 +1,25 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from archs.xception import xception
 from PIL import Image
 from torchvision.transforms import Compose
-from data.transforms import RandomFlip, RandomRotation, MakeSquare
-from data.SUNRGBD import SUNRGBD
 from config.config import cfg
 import matplotlib.pyplot as plt
 import seaborn as sns
 from seaborn import pointplot as pplot
 from scipy.io import loadmat
-from data.filter import get_filtered_indices
-from src.utils import Tree
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import math
-from src.geom_transforms import teleport, place_on_top, rotate, get_extents
 from copy import deepcopy
+from sklearn.model_selection import train_test_split
 
-from src.geom_transforms import translate, shuffle_scene
+from archs.xception import xception
+from src.geom_transforms import translate, shuffle_scene, teleport, place_on_top, rotate, get_extents
+from src.utils import Tree
+from data.filter import get_filtered_indices
+from data.transforms import RandomFlip, RandomRotation, MakeSquare
+from data.SUNRGBD import SUNRGBD
 
 class Generator():
 	def __init__(self):
@@ -82,10 +82,11 @@ class Generator():
 	def score(self, images):
 		self.model.eval()
 		scores = self.model(images).view(-1)
-		return scores.cpu().numpy()
+		normalized_score = F.softmax(scores / cfg['temperature'], dim=-1)
+		return scores.cpu().numpy(), normalized_score.cpu().numpy()
 	
-	def hill_climbing(self, init_corners, labels, init_tiers, extents, num_neighbours=20, beam_width=5, num_steps=50):
-		print(labels)
+	def hill_climbing(self, init_corners, labels, init_tiers, extents, index, num_neighbours=20, beam_width=5,
+						num_steps=75, dirname="results/"):
 		# TODO: Handle the new tiers that are returned by self.next(...)
 		corners_list_beam = deepcopy(init_corners[None,...])	# 1 x num_objs x 4 x 3
 		tiers_list_beam = deepcopy(init_tiers[None,...])			# 1 x num_objects
@@ -114,20 +115,25 @@ class Generator():
 			
 			# Append initial scene to top_images to show progress
 			if step == 0:
-				top_images.append(SUNRGBD.convert_masked_stack_to_map(images[-1]))
+				top_images.append(SUNRGBD.convert_masked_stack_to_map(SUNRGBD.gen_masked_stack(all_new_corners_list[-1],
+																								labels,
+																								all_new_tiers_list[-1],
+																								image_extents,
+																								sz=1024)))
+				top_images[0].save(dirname + "{}_init.jpg".format(index))
 
 
 			# Pass images through the model and get scores
 			images = torch.Tensor(np.stack(images, axis=0)).to(self.device)
-			scores = self.score(images)
+			scores, normalized_scores = self.score(images)
 
 			if step == 0:
 				beam_scores.append(np.array([scores[-1]]))
 			
 			# Pick top beam-width number of configurations w/o replacement - stochastic selection
-			# top_indices = np.random.choice(images.shape[0], beam_width, replace=False, p=scores)
+			top_indices = np.random.choice(normalized_scores.shape[0], beam_width, replace=False, p=normalized_scores)
 			# Hard selection
-			top_indices = np.flip(np.argsort(scores))[:beam_width]
+			# top_indices = np.flip(np.argsort(scores))[:beam_width]
 
 			# Update beam
 			corners_list_beam = all_new_corners_list[top_indices]
@@ -136,27 +142,33 @@ class Generator():
 
 			# Save top image in gif
 			top_image = images[top_indices[np.argmax(scores[top_indices])]].cpu().numpy()
-			top_image = SUNRGBD.convert_masked_stack_to_map(top_image)	# 128 x 128
+			top_image_corners = all_new_corners_list[top_indices[np.argmax(scores[top_indices])]]
+			top_image_tier = all_new_tiers_list[top_indices[np.argmax(scores[top_indices])]]
+			top_image = SUNRGBD.convert_masked_stack_to_map(SUNRGBD.gen_masked_stack(top_image_corners,
+																					labels,
+																					top_image_tier,
+																					image_extents,
+																					sz=1024))
+			# top_image = SUNRGBD.convert_masked_stack_to_map(top_image)	# 128 x 128
 			top_images.append(top_image)
 
 		
-		top_images[0].save('out.gif', save_all=True, append_images=top_images[1:], fps=0.05, loop=0, optimize=False)
+		top_images[0].save(dirname + '{}_out.gif'.format(index), save_all=True, append_images=top_images[1:], fps=0.05, loop=0, optimize=False)
+		top_images[-1].save(dirname + '{}_final.jpg'.format(index))
 		
 		return corners_list_beam, tiers_list_beam, beam_scores 
 
-	def initialize(self, index):
-		data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
-		filtered_indices = get_filtered_indices(data)
-		train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
-		bboxes = train_dataset.img_corner_list[index]['vertices']
-		areas = train_dataset.img_corner_list[index]['areas']
-		heights = train_dataset.img_corner_list[index]['heights']
-		labels = train_dataset.img_corner_list[index]['labels']
-		shuffled_boxes, shuffled_tiers = shuffle_scene(bboxes[:,:,:2].copy(), areas.copy())
-		extents = get_extents(shuffled_boxes)
-		return shuffled_boxes, labels, shuffled_tiers, extents
+def initialize(dataset, index):
+	bboxes = dataset.img_corner_list[index]['vertices']
+	areas = dataset.img_corner_list[index]['areas']
+	heights = dataset.img_corner_list[index]['heights']
+	labels = dataset.img_corner_list[index]['labels']
+	shuffled_boxes, shuffled_tiers = shuffle_scene(bboxes[:,:,:2].copy(), areas.copy())
+	extents = get_extents(shuffled_boxes)
+	
+	return shuffled_boxes, labels, shuffled_tiers, extents
 
-def plot_scores_with_errorbars(scores, scene_index):
+def plot_scores_with_errorbars(scores, scene_index, dirname="results/"):
 	mean_scores = np.array([np.mean(score_list) for score_list in scores])
 	max_scores = np.array([np.max(score_list) for score_list in scores])
 	min_scores = np.array([np.min(score_list) for score_list in scores])
@@ -166,16 +178,27 @@ def plot_scores_with_errorbars(scores, scene_index):
 	plt.fill_between(X, min_scores, max_scores, color='b', alpha=.1)
 	plt.xlabel("step")
 	plt.ylabel("score")
-	plt.savefig("{}.jpg".format(scene_index))
+	plt.savefig(dirname + "{}.jpg".format(scene_index))
 	plt.close()
 			
 
 if __name__ == '__main__':
 	generator = Generator()
-	corners, labels, tiers, extents = generator.initialize(69)
-	_, _, beam_scores = generator.hill_climbing(corners[...,:2], labels, tiers, extents)
-	import pdb; pdb.set_trace()
-	plot_scores_with_errorbars(beam_scores, 69)
+
+	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
+	filtered_indices = get_filtered_indices(data)
+	idx_trainval, idx_test = train_test_split(filtered_indices, test_size=0.1, random_state=1)
+	idx_train, idx_val = train_test_split(idx_trainval, test_size=0.3, random_state=1)
+	val_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data[idx_val], split='val')
+
+	# indices = np.random.choice(len(val_dataset), 100, replace=False)
+	indices = [53]
+	dirname=""
+	for index in indices:
+		corners, labels, tiers, extents = initialize(val_dataset, index)
+		print("Index {}: Labels - {}, Tiers - {}".format(index, labels, tiers))
+		_, _, beam_scores = generator.hill_climbing(corners[...,:2], labels, tiers, extents, index, dirname=dirname)
+		plot_scores_with_errorbars(beam_scores, index, dirname=dirname)
 
 	# from src.test import *
 	# generator = Generator()

@@ -86,12 +86,12 @@ class SUNRGBD(Dataset):
 		return image
 	
 	@staticmethod
-	def gen_masked_stack(boxes, labels, tiers, extents=None):
+	def gen_masked_stack(boxes, labels, tiers, extents=None, sz=None):
 		if extents is None:
 			x_min, x_max, y_min, y_max = get_extents_of_boxes(boxes)
 			extents = (x_max-x_min, y_max-y_min)
 		num_classes = len(SUNRGBD._classes)
-		boxes, H, W = scale_boxes(boxes, extents)
+		boxes, H, W = scale_boxes(boxes, extents, sz=sz)
 		image = np.zeros((num_classes, H, W), dtype=np.float)	# One channel for each class
 		for box, label, tier in zip(boxes, labels, tiers):
 			image = SUNRGBD.add_masked_oriented_stack(image, box[:,:2], label, tier)
@@ -242,9 +242,9 @@ class SUNRGBD(Dataset):
 		# -----------------------------------------------------------
 		# ---------------------- VISUALIZATION ----------------------
 		# -----------------------------------------------------------	
-		# map_image = SUNRGBD.convert_masked_stack_to_map(image)
-		# random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
-		# SUNRGBD.viz_pair_map_images(map_image, random_map_image)
+		map_image = SUNRGBD.convert_masked_stack_to_map(image)
+		random_map_image = SUNRGBD.convert_masked_stack_to_map(random_image)
+		SUNRGBD.viz_pair_map_images(map_image, random_map_image)
 		# -----------------------------------------------------------
 
 		# image - num_classes x H x W
@@ -255,9 +255,10 @@ class SUNRGBD(Dataset):
 
 if __name__ == '__main__':
 	data = loadmat(cfg['data_path'])['SUNRGBDMeta'].squeeze()
-	import pdb; pdb.set_trace()
+	# import pdb; pdb.set_trace()
 	filtered_indices = get_filtered_indices(data)
 	train_dataset = SUNRGBD(cfg['data_root'], cfg['cache_dir'], data=data[filtered_indices], split="train")
+	import pdb; pdb.set_trace()
 	# for i in range(4):
 		# train_dataset[i]
 	# import pdb; pdb.set_trace()
